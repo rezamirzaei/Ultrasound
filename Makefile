@@ -18,7 +18,7 @@ format:
 	python -m isort src/ tests/ main.py
 
 typecheck:
-	python -m mypy src/ultrasound --ignore-missing-imports
+	python -m mypy --config-file pyproject.toml --python-version 3.11 --no-site-packages src/ultrasound --ignore-missing-imports
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

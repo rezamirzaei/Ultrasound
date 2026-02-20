@@ -30,7 +30,7 @@ jobs:
         run: python -m isort --check-only src/ tests/ main.py
 
       - name: Type check (mypy)
-        run: python -m mypy src/ultrasound --ignore-missing-imports
+        run: python -m mypy --config-file pyproject.toml --python-version 3.11 --no-site-packages src/ultrasound --ignore-missing-imports
 
       - name: Run tests with coverage
         run: pytest tests/ -v --tb=short --cov=src/ultrasound --cov-report=term-missing --cov-fail-under=40
