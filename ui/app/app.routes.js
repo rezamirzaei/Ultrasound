@@ -10,6 +10,11 @@
           controller: "DashboardController",
           controllerAs: "vm",
         })
+        .when("/busi", {
+          templateUrl: "app/views/busi.html",
+          controller: "BusiController",
+          controllerAs: "vm",
+        })
         .when("/preprocessing", {
           templateUrl: "app/views/preprocessing.html",
           controller: "PreprocessingController",

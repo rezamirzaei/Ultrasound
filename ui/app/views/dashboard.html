@@ -14,24 +14,34 @@
       <metric-tile label="NDT Samples" value="vm.summary.ndt_samples" tone="accent"></metric-tile>
       <metric-tile label="Generated" value="vm.summary.generated_at | date:'medium'" tone="muted"></metric-tile>
     </div>
-    <button class="btn" ng-click="vm.refresh()">Refresh</button>
+    <div class="toolbar">
+      <button class="btn" ng-click="vm.refresh()">Refresh</button>
+      <button class="btn btn-muted" ng-click="vm.go('/busi')">Open BUSI Explorer</button>
+      <button class="btn btn-muted" ng-click="vm.go('/preprocessing')">Run Preprocessing</button>
+    </div>
   </div>
 
   <div class="panel">
     <h3>BUSI Distribution</h3>
-    <ul class="list">
-      <li>
-        <span>Benign</span>
-        <strong>{{ vm.summary.busi_counts.benign }}</strong>
-      </li>
-      <li>
-        <span>Malignant</span>
-        <strong>{{ vm.summary.busi_counts.malignant }}</strong>
-      </li>
-      <li>
-        <span>Normal</span>
-        <strong>{{ vm.summary.busi_counts.normal }}</strong>
+    <ul class="list compact">
+      <li ng-repeat="row in vm.busiRows">
+        <span>{{ row.name | uppercase }}</span>
+        <strong>{{ row.count }} ({{ row.pct | number:1 }}%)</strong>
       </li>
     </ul>
+  </div>
+</section>
+
+<section ng-if="vm.summary && !vm.loading" class="panel">
+  <h3>NDT Samples Snapshot</h3>
+  <p class="note" ng-if="!vm.ndtSamples.length">No NDT samples found in <code>data/ascan_signals/ndt_samples</code>.</p>
+  <ul class="list compact" ng-if="vm.ndtSamples.length">
+    <li ng-repeat="sample in vm.ndtSamples">
+      <span>{{ sample.name }}</span>
+      <strong>{{ sample.n_defects }} defects | {{ sample.n_points }} points</strong>
+    </li>
+  </ul>
+  <div class="toolbar">
+    <button class="btn btn-muted" ng-click="vm.go('/ndt')">Open NDT Explorer</button>
   </div>
 </section>

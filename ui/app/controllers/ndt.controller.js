@@ -10,8 +10,19 @@
       vm.detailLoading = false;
       vm.error = null;
       vm.samples = [];
+      vm.searchQuery = "";
       vm.selectedName = null;
       vm.selected = null;
+
+      vm.filteredSamples = function () {
+        if (!vm.searchQuery) {
+          return vm.samples;
+        }
+        var query = vm.searchQuery.toLowerCase();
+        return vm.samples.filter(function (sample) {
+          return sample.name.toLowerCase().indexOf(query) !== -1;
+        });
+      };
 
       vm.loadDetail = function (sampleName) {
         vm.selectedName = sampleName;

@@ -204,6 +204,17 @@ body {
   cursor: pointer;
 }
 
+.btn.btn-muted {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-main);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -231,6 +242,22 @@ select {
 .form-actions {
   display: flex;
   align-items: flex-end;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.inline-field {
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+  color: var(--text-soft);
+  font-size: 0.85rem;
 }
 
 .image-grid {
@@ -270,6 +297,10 @@ select {
   gap: 8px;
 }
 
+.list.compact li {
+  padding: 8px 10px;
+}
+
 .list li {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -293,6 +324,66 @@ select {
   line-height: 1.5;
 }
 
+.preview-image {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.class-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: var(--font-main);
+}
+
+.chip.active {
+  background: rgba(32, 201, 151, 0.18);
+  border-color: rgba(32, 201, 151, 0.7);
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.result-table th,
+.result-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.result-table thead th {
+  color: var(--text-soft);
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.result-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.metric-grid.metric-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 @media (max-width: 1024px) {
   .shell {
     grid-template-columns: 1fr;
@@ -308,6 +399,10 @@ select {
   }
 
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-grid.metric-grid-4 {
     grid-template-columns: 1fr;
   }
 }

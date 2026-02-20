@@ -118,6 +118,19 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     assert detail["n_points"] > 0
 
 
+def test_busi_sample_preview_endpoint(client: TestClient) -> None:
+    response = client.get("/api/v1/datasets/busi/samples/benign/0")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["class_name"] == "benign"
+    assert payload["total_samples"] > 0
+    assert payload["image_data_url"].startswith("data:image/png;base64,")
+    assert payload["mask_data_url"].startswith("data:image/png;base64,")
+    assert payload["lesion_pixels"] >= 0
+    assert 0.0 <= payload["lesion_ratio"] <= 1.0
+
+
 def test_preprocessing_preview_endpoint(client: TestClient) -> None:
     response = client.post(
         "/api/v1/preprocessing/preview",

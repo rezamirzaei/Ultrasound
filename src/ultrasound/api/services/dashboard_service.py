@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
+from io import BytesIO
+
+import numpy as np
+from PIL import Image
 
 from ultrasound.api.models.schemas import (
+    BusiSamplePreview,
     DashboardSummaryResponse,
     NdtSampleDetail,
     NdtSampleSummary,
@@ -18,6 +24,21 @@ class DashboardService:
     def __init__(self, dataset_repository: DatasetRepository):
         self.dataset_repository = dataset_repository
 
+    def _as_data_url(self, image: np.ndarray) -> str:
+        """Convert grayscale/RGB arrays to PNG data URLs consumable by the UI."""
+        if image.dtype != np.uint8:
+            image = np.clip(image, 0, 255).astype(np.uint8)
+
+        if image.ndim == 2:
+            pil = Image.fromarray(image, mode="L")
+        else:
+            pil = Image.fromarray(image)
+
+        buffer = BytesIO()
+        pil.save(buffer, format="PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+
     def get_summary(self) -> DashboardSummaryResponse:
         busi_counts = self.dataset_repository.get_busi_counts()
         ndt_samples = self.dataset_repository.list_ndt_samples()
@@ -30,6 +51,34 @@ class DashboardService:
 
     def get_busi_counts(self) -> dict[str, int]:
         return self.dataset_repository.get_busi_counts()
+
+    def get_busi_sample_preview(self, class_name: str, sample_index: int) -> BusiSamplePreview:
+        counts = self.dataset_repository.get_busi_counts()
+        total = int(counts.get(class_name, 0))
+        if total <= 0:
+            raise FileNotFoundError(f"No BUSI samples available for class '{class_name}'.")
+
+        resolved_index = int(sample_index % total)
+        image_rgb, mask = self.dataset_repository.get_busi_sample(
+            class_name=class_name,
+            index=resolved_index,
+        )
+        mask_binary = np.asarray(mask > 0, dtype=np.uint8) * 255
+
+        lesion_pixels = int(np.count_nonzero(mask_binary))
+        lesion_ratio = float(lesion_pixels / mask_binary.size) if mask_binary.size else 0.0
+
+        return BusiSamplePreview(
+            class_name=class_name,
+            requested_index=int(sample_index),
+            resolved_index=resolved_index,
+            total_samples=total,
+            image_shape=[int(v) for v in image_rgb.shape],
+            lesion_pixels=lesion_pixels,
+            lesion_ratio=lesion_ratio,
+            image_data_url=self._as_data_url(image_rgb),
+            mask_data_url=self._as_data_url(mask_binary),
+        )
 
     def list_ndt_samples(self) -> list[NdtSampleSummary]:
         rows = self.dataset_repository.summarize_ndt_samples()

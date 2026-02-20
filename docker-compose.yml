@@ -6,9 +6,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./src:/app/src
       - ./data:/app/data
       - ./outputs:/app/outputs
       - ./ui:/app/ui
+    environment:
+      - PYTHONPATH=/app/src
     command: ["python", "-m", "ultrasound.api"]
 
   test:

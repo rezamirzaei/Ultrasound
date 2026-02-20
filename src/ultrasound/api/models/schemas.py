@@ -35,6 +35,18 @@ class NdtSampleDetail(NdtSampleSummary):
     defects: List[dict]
 
 
+class BusiSamplePreview(BaseModel):
+    class_name: str
+    requested_index: int
+    resolved_index: int
+    total_samples: int
+    image_shape: List[int]
+    lesion_pixels: int
+    lesion_ratio: float
+    image_data_url: str
+    mask_data_url: str
+
+
 class PreprocessingRequest(BaseModel):
     class_name: str = Field(default="benign", pattern="^(benign|malignant|normal)$")
     sample_index: int = Field(default=0, ge=0)

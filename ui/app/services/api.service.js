@@ -22,6 +22,16 @@
         return $http.get(baseUrl + "/datasets/busi/counts");
       };
 
+      this.getBusiSamplePreview = function (className, sampleIndex) {
+        return $http.get(
+          baseUrl +
+            "/datasets/busi/samples/" +
+            encodeURIComponent(className) +
+            "/" +
+            encodeURIComponent(String(sampleIndex))
+        );
+      };
+
       this.listNdtSamples = function () {
         return $http.get(baseUrl + "/datasets/ndt/samples");
       };

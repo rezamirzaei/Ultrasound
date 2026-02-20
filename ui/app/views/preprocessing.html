@@ -1,17 +1,26 @@
 <section class="panel">
   <h3>Run Preprocessing Preview</h3>
+  <p class="note">
+    Configure a BUSI sample, run all denoising/enhancement methods, and compare quality metrics to select
+    the best pipeline.
+  </p>
+  <div class="toolbar">
+    <button class="btn btn-muted" type="button" ng-click="vm.applyPreset('fast')">Fast</button>
+    <button class="btn btn-muted" type="button" ng-click="vm.applyPreset('balanced')">Balanced</button>
+    <button class="btn btn-muted" type="button" ng-click="vm.applyPreset('aggressive')">Aggressive</button>
+  </div>
   <form class="form-grid" ng-submit="vm.run()">
     <label>
       BUSI Class
-      <select ng-model="vm.form.class_name">
-        <option value="benign">benign</option>
-        <option value="malignant">malignant</option>
-        <option value="normal">normal</option>
+      <select ng-model="vm.form.class_name" ng-change="vm.onClassChanged()">
+        <option ng-repeat="className in vm.availableClasses" value="{{ className }}">
+          {{ className }} ({{ vm.classCounts[className] }})
+        </option>
       </select>
     </label>
     <label>
       Sample Index
-      <input type="number" min="0" ng-model="vm.form.sample_index" />
+      <input type="number" min="0" max="{{ vm.maxSampleIndex() }}" ng-model="vm.form.sample_index" />
     </label>
     <label>
       TV Lambda
@@ -43,14 +52,49 @@
 
 <section ng-if="vm.preview" class="panel">
   <h3>Result</h3>
-  <p class="note">Recommended method by SSIM: <strong>{{ vm.preview.recommendation }}</strong></p>
+  <p class="note">
+    Recommended method by SSIM: <strong>{{ vm.preview.recommendation }}</strong>
+  </p>
+  <p class="note">
+    Image shape: <strong>{{ vm.preview.image_shape.join(' x ') }}</strong> | Generated:
+    <strong>{{ vm.preview.generated_at | date:'medium' }}</strong>
+  </p>
+
+  <div class="toolbar">
+    <span class="note">Sort methods by:</span>
+    <button class="btn btn-muted" type="button" ng-click="vm.setSortMetric('ssim')">SSIM</button>
+    <button class="btn btn-muted" type="button" ng-click="vm.setSortMetric('psnr')">PSNR</button>
+    <button class="btn btn-muted" type="button" ng-click="vm.setSortMetric('rmse')">RMSE</button>
+    <button class="btn btn-muted" type="button" ng-click="vm.setSortMetric('cv')">CV</button>
+  </div>
+
+  <table class="result-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>RMSE</th>
+        <th>PSNR</th>
+        <th>SSIM</th>
+        <th>CV</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr ng-repeat="method in vm.sortedMethods">
+        <td>{{ method.name }}</td>
+        <td>{{ method.metrics.rmse | number:2 }}</td>
+        <td>{{ method.metrics.psnr | number:2 }}</td>
+        <td>{{ method.metrics.ssim | number:3 }}</td>
+        <td>{{ method.metrics.cv | number:3 }}</td>
+      </tr>
+    </tbody>
+  </table>
 
   <div class="image-grid">
     <article>
       <h4>Original</h4>
       <img ng-src="{{ vm.preview.original_image_data_url }}" alt="Original" />
     </article>
-    <article ng-repeat="method in vm.preview.methods">
+    <article ng-repeat="method in vm.sortedMethods">
       <h4>{{ method.name }}</h4>
       <img ng-src="{{ method.image_data_url }}" alt="{{ method.name }}" />
       <ul class="mini-metrics">

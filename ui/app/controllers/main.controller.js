@@ -18,6 +18,7 @@
 
       var pageMap = {
         "/dashboard": "Project Dashboard",
+        "/busi": "BUSI Explorer",
         "/preprocessing": "Preprocessing Lab",
         "/ndt": "NDT Sample Explorer",
       };

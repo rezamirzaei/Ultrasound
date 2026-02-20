@@ -9,9 +9,13 @@
 <section ng-if="!vm.loading" class="grid-2">
   <div class="panel">
     <h3>Available Samples</h3>
+    <label>
+      Search
+      <input type="text" ng-model="vm.searchQuery" placeholder="Filter by sample name..." />
+    </label>
     <ul class="list selectable">
       <li
-        ng-repeat="sample in vm.samples"
+        ng-repeat="sample in vm.filteredSamples()"
         ng-click="vm.loadDetail(sample.name)"
         ng-class="{active: vm.selectedName === sample.name}"
       >
@@ -23,6 +27,7 @@
 
   <div class="panel" ng-if="vm.selected">
     <h3>Sample Detail</h3>
+    <p class="note" ng-if="vm.detailLoading">Loading detail...</p>
     <ul class="list">
       <li><span>Name</span><strong>{{ vm.selected.name }}</strong></li>
       <li><span>Points</span><strong>{{ vm.selected.n_points }}</strong></li>
@@ -32,5 +37,22 @@
       <li><span>Defects</span><strong>{{ vm.selected.n_defects }}</strong></li>
     </ul>
     <p class="note">{{ vm.selected.description }}</p>
+
+    <table class="result-table" ng-if="vm.selected.defects && vm.selected.defects.length">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Depth (mm)</th>
+          <th>Amplitude</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="defect in vm.selected.defects">
+          <td>{{$index + 1}}</td>
+          <td>{{ defect.depth_m * 1000 | number:3 }}</td>
+          <td>{{ defect.amplitude | number:3 }}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>

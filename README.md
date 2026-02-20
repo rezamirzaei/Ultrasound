@@ -125,6 +125,12 @@ Then open:
 - API docs: `http://localhost:8000/docs`
 - API health: `http://localhost:8000/api/v1/health`
 
+UI modules:
+- Dashboard: project summary + quick navigation
+- BUSI Explorer: browse images/masks by class and sample index
+- Preprocessing Lab: run Lee/Frost/CLAHE/ADMM-TV and compare metrics
+- NDT Explorer: inspect sample metadata and defect tables
+
 Run tests in Docker explicitly:
 
 ```bash

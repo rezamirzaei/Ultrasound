@@ -1,0 +1,67 @@
+<section class="panel">
+  <h3>BUSI Sample Explorer</h3>
+  <p class="note">
+    Browse class-balanced ultrasound examples with lesion masks. Use this before preprocessing to validate
+    input quality and lesion coverage.
+  </p>
+
+  <div class="class-chip-row">
+    <button
+      type="button"
+      class="chip"
+      ng-repeat="className in vm.availableClasses"
+      ng-class="{active: vm.selectedClass === className}"
+      ng-click="vm.selectClass(className)"
+    >
+      {{ className }} ({{ vm.classCounts[className] }})
+    </button>
+  </div>
+
+  <div class="toolbar">
+    <button type="button" class="btn btn-muted" ng-click="vm.prev()" ng-disabled="vm.loading || vm.requestedIndex <= 0">
+      Previous
+    </button>
+    <label class="inline-field">
+      Index
+      <input type="number" min="0" ng-model="vm.requestedIndex" ng-disabled="vm.loading || !vm.hasData()" />
+    </label>
+    <button type="button" class="btn btn-muted" ng-click="vm.jumpTo()" ng-disabled="vm.loading || !vm.hasData()">
+      Go
+    </button>
+    <button type="button" class="btn" ng-click="vm.next()" ng-disabled="vm.loading || !vm.hasData()">Next</button>
+  </div>
+</section>
+
+<section class="panel" ng-if="vm.loading">
+  <p>Loading BUSI sample...</p>
+</section>
+
+<section class="panel error" ng-if="vm.error">
+  <p>{{ vm.error }}</p>
+</section>
+
+<section class="grid-2" ng-if="vm.sample && !vm.loading">
+  <div class="panel">
+    <h3>Ultrasound Image</h3>
+    <img class="preview-image" ng-src="{{ vm.sample.image_data_url }}" alt="BUSI sample image" />
+  </div>
+
+  <div class="panel">
+    <h3>Lesion Mask</h3>
+    <img class="preview-image" ng-src="{{ vm.sample.mask_data_url }}" alt="BUSI lesion mask" />
+  </div>
+</section>
+
+<section class="panel" ng-if="vm.sample && !vm.loading">
+  <h3>Sample Metadata</h3>
+  <div class="metric-grid metric-grid-4">
+    <metric-tile label="Class" value="vm.sample.class_name" tone="accent"></metric-tile>
+    <metric-tile label="Resolved Index" value="vm.sample.resolved_index" tone="muted"></metric-tile>
+    <metric-tile label="Total in Class" value="vm.sample.total_samples" tone="accent"></metric-tile>
+    <metric-tile label="Lesion Ratio" value="(vm.sample.lesion_ratio * 100) | number:2"></metric-tile>
+  </div>
+  <ul class="list compact">
+    <li><span>Image Shape</span><strong>{{ vm.sample.image_shape.join(' x ') }}</strong></li>
+    <li><span>Lesion Pixels</span><strong>{{ vm.sample.lesion_pixels }}</strong></li>
+  </ul>
+</section>
