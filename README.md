@@ -34,10 +34,12 @@ This toolkit provides production-ready implementations of:
 ## 📁 Project Structure
 
 ```
-ultrasound-imaging-toolkit/
-├── src/ultrasound/
-│   ├── data/                 # Dataset loading and preprocessing
-│   │   └── __init__.py       # BUSI dataset, synthetic data generation
+inPhase/
+├── src/ultrasound/           # Main package
+│   ├── __init__.py
+│   ├── demo.py               # CLI demo application
+│   ├── data/                 # Dataset loading & synthetic generation
+│   │   └── __init__.py       # BUSIDataset, create_sample_data
 │   ├── preprocessing/        # Image preprocessing modules
 │   │   ├── speckle.py        # Speckle reduction filters
 │   │   ├── enhancement.py    # Contrast enhancement methods
@@ -46,17 +48,17 @@ ultrasound-imaging-toolkit/
 │   ├── models/               # Deep learning models
 │   │   ├── unet.py           # U-Net, Attention U-Net
 │   │   └── classifier.py     # CNN, ResNet classifiers
-│   ├── utils/                # Utility functions
-│   │   ├── io.py             # Image I/O, DICOM support
-│   │   ├── metrics.py        # Dice, IoU, accuracy metrics
-│   │   └── visualization.py  # Plotting and visualization
-│   └── visualization/        # Visualization subpackage
-├── notebooks/
-│   └── ultrasound_demo.ipynb # Interactive demonstration
-├── tests/                    # Unit tests
-├── outputs/                  # Generated outputs
-├── main.py                   # Main demo script
-├── pyproject.toml           # Project configuration
+│   └── utils/                # Utility functions
+│       ├── io.py             # Image I/O, DICOM support
+│       ├── metrics.py        # Dice, IoU, accuracy metrics
+│       └── visualization.py  # Plotting and visualization
+├── tests/                    # Unit tests (pytest)
+├── scripts/                  # Data download utilities
+├── notebooks/                # Jupyter demos & experiments
+├── main.py                   # CLI entrypoint
+├── pyproject.toml            # Project configuration
+├── Makefile                  # Common dev commands
+├── Dockerfile                # Container build
 └── README.md
 ```
 

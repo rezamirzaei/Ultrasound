@@ -1,7 +1,13 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ultrasound-imaging-toolkit"
 version = "0.1.0"
 description = "Ultrasound Image Processing and Analysis Toolkit - Demonstrating signal processing, image analysis, and ML for medical ultrasound applications"
+readme = "README.md"
+license = "MIT"
 authors = [
     {name = "Reza Mirzaeifard", email = "reza.mirzaeifard@gmail.com"}
 ]
@@ -11,28 +17,35 @@ dependencies = [
     "scipy>=1.10.0",
     "matplotlib>=3.7.0",
     "scikit-image>=0.21.0",
+    "PyWavelets>=1.5.0",
     "scikit-learn>=1.3.0",
     "opencv-python-headless>=4.8.0",
-    "torch>=2.0.0,<2.3.0",
-    "torchvision>=0.15.0,<0.18.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
     "pandas>=2.0.0",
     "pillow>=10.0.0",
     "tqdm>=4.65.0",
-    "kaggle>=1.5.0",
-    "jupyter>=1.0.0",
     "seaborn>=0.12.0",
-    "ipykernel>=6.31.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "isort>=5.12.0",
+    "mypy>=1.0.0",
+]
+notebooks = [
+    "jupyter>=1.0.0",
+    "kaggle>=1.5.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/rezamirzaei/ultrasound-imaging-toolkit"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.black]
 line-length = 100
@@ -41,6 +54,24 @@ target-version = ["py39"]
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
 
 [tool.uv]
 # Ensure uv resolves to versions with compatible wheels for all platforms

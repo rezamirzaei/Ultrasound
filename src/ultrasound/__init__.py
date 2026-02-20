@@ -17,6 +17,6 @@ Email: reza.mirzaeifard@gmail.com
 __version__ = "0.1.0"
 __author__ = "Reza Mirzaeifard"
 
-from .preprocessing import SpeckleReducer, ContrastEnhancer
-from .models import UNet, UltrasoundClassifier
+from .models import UltrasoundClassifier, UNet
+from .preprocessing import ContrastEnhancer, SpeckleReducer
 from .utils import load_image, save_image, visualize_results

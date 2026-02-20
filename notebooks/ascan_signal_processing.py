@@ -45,11 +45,6 @@
 # %% [markdown]
 # ---
 # ## 1. Environment Setup
-#
-# First, we import the necessary Python libraries for signal processing and visualization:
-# - **NumPy**: Numerical computing and array operations
-# - **Matplotlib**: Visualization and plotting
-# - **SciPy**: Signal processing functions (Hilbert transform, filtering, peak detection)
 
 # %%
 from pathlib import Path
@@ -72,23 +67,15 @@ print(f"✓ Project root: {project_root}")
 print(f"✓ Data path: {data_path}")
 
 # %% [markdown]
-# **Setup Complete.** All required libraries are loaded and paths are configured.
-
-# %% [markdown]
 # ---
 # ## 2. Load Real Ultrasound Data
 #
-# In this section, we load real NDT (Non-Destructive Testing) ultrasound data files.
-# These files contain A-scan signals from industrial inspection scenarios:
+# We use real ultrasound data from:
+# - **NDT Test Data** - Pre-generated industrial ultrasound signals (in `data/ascan_signals/ndt_samples/`)
+# - **Synthetic Physics-Based Data** - Realistic simulations with proper wave physics
 #
-# | File | Description | Application |
-# |------|-------------|-------------|
-# | `weld_inspection.npz` | Weld with lack of fusion defects | Weld quality control |
-# | `steel_plate_10mm.npz` | Clean 10mm steel plate | Baseline reference |
-# | `steel_plate_with_crack.npz` | 20mm steel with internal crack | Defect detection |
-# | `corrosion_thinning.npz` | Corroded plate | Corrosion monitoring |
-#
-# The data includes RF (radio frequency) signals sampled at 50 MHz with a 5 MHz transducer.
+# Note: The NDT test data was generated using realistic ultrasound physics models
+# and represents actual industrial inspection scenarios.
 
 # %%
 # Check for available data
@@ -144,27 +131,11 @@ if ndt_dir.exists():
         print(f"  Samples: {len(data['rf'])}, Fs: {data['fs']/1e6:.1f} MHz")
 
 # %% [markdown]
-# **Data Loading Summary:** We have successfully loaded the NDT test data files. Each file contains:
-# - RF signal data (raw ultrasound waveform)
-# - Sampling frequency (50 MHz)
-# - Material properties (speed of sound in steel: 5900 m/s)
-# - Ground truth thickness values for validation
-
-# %% [markdown]
 # ---
 # ## 3. Load NDT Data for Analysis
 #
-# For detailed analysis, we'll focus on the **weld inspection** dataset. This dataset
-# represents a common industrial NDT scenario: inspecting a welded steel joint for
-# internal defects such as:
-# - Lack of fusion
-# - Porosity
-# - Cracks
-#
-# The signal contains echoes from:
-# 1. Front surface (entry point)
-# 2. Internal defects (if present)
-# 3. Back wall (opposite surface)
+# We'll use the weld inspection data as our primary example - it has the most
+# interesting features including multiple defects.
 
 # %%
 # Load the weld inspection data for detailed analysis
@@ -191,23 +162,8 @@ print(f"  True thickness: {thickness*1000:.1f} mm")
 print(f"  Depth range: 0 - {depth_mm[-1]:.1f} mm")
 
 # %% [markdown]
-# **Key Parameters:**
-# - **Sampling frequency (50 MHz)**: Provides excellent time resolution (~20 ns per sample)
-# - **Center frequency (5 MHz)**: Typical for steel inspection, balances resolution and penetration
-# - **Material velocity (5900 m/s)**: Sound speed in steel, used to convert time to depth
-# - **Depth conversion**: `depth = time × velocity / 2` (divide by 2 for round-trip)
-
-# %% [markdown]
 # ---
 # ## 4. Time-Domain Analysis
-#
-# The first step in ultrasound signal processing is examining the raw RF (Radio Frequency)
-# signal in the time domain. This reveals:
-# - **Signal structure**: Location and amplitude of echoes
-# - **Noise level**: Background noise characteristics
-# - **Pulse shape**: Transducer response characteristics
-#
-# We visualize the signal both in time and depth coordinates.
 
 # %%
 fig, axes = plt.subplots(2, 2, figsize=(16, 10))
@@ -254,41 +210,13 @@ plt.savefig(project_root / 'outputs' / 'ascan_time_domain.png', dpi=150)
 plt.show()
 
 # %% [markdown]
-# ### Time-Domain Analysis: Key Takeaways
-#
-# From the time-domain plots, we observe:
-#
-# 1. **Clear echo structure**: Multiple distinct echoes are visible, indicating reflections from interfaces
-# 2. **Front surface echo**: Strong initial pulse at the material entry point
-# 3. **Internal reflections**: Additional echoes between front and back wall may indicate defects
-# 4. **Back wall echo**: Expected at the known material thickness
-# 5. **Noise characteristics**: The amplitude histogram shows the noise distribution
-#
-# **Next Step**: Extract the signal envelope to better visualize echo amplitudes.
-
-# %% [markdown]
 # ---
 # ## 5. Envelope Detection (Hilbert Transform)
 #
-# The raw RF signal oscillates at the transducer frequency (5 MHz), making it difficult
-# to directly measure echo amplitudes. The **Hilbert transform** extracts the signal
-# envelope, which represents the instantaneous amplitude.
-#
-# ### Mathematical Background
-#
-# The analytic signal is defined as:
-# ```
-# z(t) = x(t) + j·H{x(t)}
-# ```
-# where H{} denotes the Hilbert transform. The envelope is then:
-# ```
-# envelope(t) = |z(t)|
-# ```
-#
-# ### Applications
-# - **B-mode imaging**: Envelope is used for grayscale display
-# - **Peak detection**: Find echo locations and amplitudes
-# - **Defect sizing**: Amplitude correlates with reflector size
+# The Hilbert transform extracts the signal envelope, which is essential for:
+# - Amplitude-based imaging (B-mode)
+# - Peak detection
+# - Time-of-flight measurement
 
 # %%
 def envelope_detection(rf_signal, fs):
@@ -358,32 +286,8 @@ plt.savefig(project_root / 'outputs' / 'ascan_envelope.png', dpi=150)
 plt.show()
 
 # %% [markdown]
-# ### Envelope Detection: Key Takeaways
-#
-# 1. **Envelope extraction**: The Hilbert transform successfully extracts the signal envelope
-# 2. **Log compression**: Converting to dB scale (60 dB dynamic range) mimics clinical ultrasound displays
-# 3. **Echo visibility**: Echoes are now clearly visible as peaks in the envelope
-# 4. **Instantaneous frequency**: Remains close to the 5 MHz center frequency, confirming signal quality
-# 5. **Phase information**: Continuous phase can be used for advanced techniques like elastography
-#
-# **Practical Note**: The envelope is the foundation for most ultrasound imaging and measurement techniques.
-
-# %% [markdown]
 # ---
 # ## 6. Frequency Analysis (FFT & Spectrograms)
-#
-# Frequency analysis reveals important characteristics of the ultrasound signal:
-#
-# ### Why Frequency Analysis Matters
-# - **Transducer characterization**: Verify center frequency and bandwidth
-# - **Attenuation effects**: Higher frequencies attenuate faster with depth
-# - **Defect characterization**: Different defects may have different frequency signatures
-# - **Signal quality**: Detect interference or electronic noise
-#
-# We use three complementary techniques:
-# 1. **FFT**: Overall frequency content
-# 2. **Spectrogram**: Time-frequency representation (how spectrum changes with depth)
-# 3. **PSD at different depths**: Compare frequency content at various depths
 
 # %%
 def frequency_analysis(rf_signal, fs):
@@ -475,34 +379,8 @@ plt.savefig(project_root / 'outputs' / 'ascan_frequency.png', dpi=150)
 plt.show()
 
 # %% [markdown]
-# ### Frequency Analysis: Key Takeaways
-#
-# 1. **Center frequency confirmed**: Signal is centered at 5 MHz as expected
-# 2. **Bandwidth measured**: The -6dB bandwidth characterizes the transducer's frequency response
-# 3. **Frequency shift with depth**: The spectrogram shows frequency content at each depth
-# 4. **Attenuation effect**: Higher frequencies may attenuate more with depth (visible in PSD comparison)
-#
-# **Practical Application**: Frequency analysis helps in:
-# - Transducer quality control
-# - Detecting frequency-dependent defects
-# - Optimizing filter parameters for noise reduction
-
-# %% [markdown]
 # ---
 # ## 7. Filtering and Noise Reduction
-#
-# Real ultrasound signals contain noise from various sources:
-# - **Electronic noise**: From amplifiers and digitizers
-# - **Acoustic noise**: Grain noise, scattering
-# - **Interference**: External electromagnetic interference
-#
-# We demonstrate three filtering techniques:
-#
-# | Filter | Method | Best For |
-# |--------|--------|----------|
-# | **Bandpass** | Butterworth filter (2-8 MHz) | Removing out-of-band noise |
-# | **Matched** | Cross-correlation with pulse template | Maximizing SNR for known pulse |
-# | **Wiener** | Adaptive based on local SNR | Preserving signal while reducing noise |
 
 # %%
 def bandpass_filter(signal_data, fs, low_freq, high_freq, order=4):
@@ -583,33 +461,8 @@ plt.savefig(project_root / 'outputs' / 'ascan_filtering.png', dpi=150)
 plt.show()
 
 # %% [markdown]
-# ### Filtering: Key Takeaways
-#
-# Comparing the three filtering techniques:
-#
-# | Filter | Pros | Cons |
-# |--------|------|------|
-# | **Bandpass** | Simple, removes out-of-band noise | May affect pulse shape |
-# | **Matched** | Optimal SNR for known pulse | Requires accurate pulse template |
-# | **Wiener** | Adapts to local SNR | May over-smooth weak echoes |
-#
-# **Recommendation**: For NDT applications, bandpass filtering is often sufficient.
-# Matched filtering is useful when maximum sensitivity is needed for weak defects.
-
-# %% [markdown]
 # ---
 # ## 8. Peak Detection and Defect Localization
-#
-# Automated echo detection is crucial for:
-# - **Thickness measurement**: Distance between front and back wall echoes
-# - **Defect detection**: Identify unexpected echoes between surfaces
-# - **Defect sizing**: Echo amplitude correlates with reflector size
-#
-# ### Detection Algorithm
-# We use scipy's `find_peaks` with the following parameters:
-# - **Threshold**: -25 dB below maximum (detect echoes down to ~6% of max amplitude)
-# - **Minimum distance**: 5 mm (avoid detecting the same echo multiple times)
-# - **Prominence**: Ensures peaks stand out from local background
 
 # %%
 def detect_echoes(envelope, fs, min_distance_mm=5, threshold_db=-20):
@@ -728,39 +581,8 @@ if len(peaks) >= 2:
         print(f"Layer {i+1} to {i+2}: {measured_thickness*1000:.2f} mm")
 
 # %% [markdown]
-# ### Peak Detection: Key Takeaways
-#
-# 1. **Automated detection**: The algorithm successfully identifies all significant echoes
-# 2. **Echo classification**: Based on depth, we can classify echoes as:
-#    - Front surface (near 0 mm)
-#    - Internal defects (between surfaces)
-#    - Back wall (at expected thickness)
-# 3. **Thickness measurement**: Calculated from time-of-flight between echoes
-#
-# **Defect Indicators**: Any echo appearing between front surface and back wall
-# suggests an internal discontinuity (crack, inclusion, lack of fusion, etc.)
-
-# %% [markdown]
 # ---
 # ## 9. Time-Gain Compensation (TGC)
-#
-# ### The Attenuation Problem
-#
-# Ultrasound waves lose energy as they travel through material due to:
-# - **Absorption**: Energy converted to heat
-# - **Scattering**: Energy redirected by microstructure
-#
-# This causes echoes from deeper structures to appear weaker, even if the
-# reflectors are the same size.
-#
-# ### TGC Solution
-#
-# Time-Gain Compensation applies increasing gain with depth to counteract attenuation:
-# ```
-# Attenuation ≈ 0.5 dB/cm/MHz (typical for steel at 5 MHz)
-# ```
-#
-# This allows fair comparison of echo amplitudes regardless of depth.
 
 # %%
 def apply_tgc(rf_signal, fs, tgc_curve=None):
@@ -841,28 +663,10 @@ plt.savefig(project_root / 'outputs' / 'ascan_tgc.png', dpi=150)
 plt.show()
 
 # %% [markdown]
-# ### TGC: Key Takeaways
-#
-# 1. **Gain increases with depth**: The TGC curve compensates for material attenuation
-# 2. **Echo amplitude equalization**: After TGC, echoes from similar reflectors have similar amplitudes
-# 3. **Improved deep defect detection**: Without TGC, deep defects may be missed
-#
-# **Practical Note**: Modern ultrasound systems have adjustable TGC controls.
-# Proper TGC setting is critical for accurate defect sizing.
-
-# %% [markdown]
 # ---
 # ## 10. Process All NDT A-Scan Data
 #
-# Now we apply our complete signal processing pipeline to all four NDT test datasets
-# to demonstrate the robustness of the techniques across different inspection scenarios:
-#
-# | Dataset | Scenario | Expected Result |
-# |---------|----------|-----------------|
-# | Steel plate 10mm | Clean reference | Only front/back wall echoes |
-# | Steel plate with crack | Internal defect | Additional echo between walls |
-# | Weld inspection | Multiple defects | Multiple internal echoes |
-# | Corrosion thinning | Wall loss | Reduced back wall distance |
+# Now we apply our signal processing pipeline to all NDT test data files.
 
 # %%
 def analyze_ndt_signal(data):
@@ -959,31 +763,10 @@ else:
     print("No NDT test files found. Run scripts/download_ascan_data.py first.")
 
 # %% [markdown]
-# ### Multi-Dataset Analysis: Key Takeaways
-#
-# The analysis of all four datasets demonstrates:
-#
-# 1. **Consistent performance**: The signal processing pipeline works reliably across different scenarios
-# 2. **Accurate thickness measurement**: Measured values closely match known thicknesses
-# 3. **Defect detection capability**: Internal defects are successfully identified as additional echoes
-# 4. **Corrosion detection**: Wall thinning is detectable through reduced back wall distance
-#
-# **Quality Metrics**: Typical thickness measurement accuracy is < 0.5 mm for steel at 5 MHz.
-
-# %% [markdown]
 # ---
-# ## 11. Complete Signal Processing Pipeline
+# ## 11. Full Pipeline Analysis Data with Full Pipeline
 #
-# This final section demonstrates the complete end-to-end signal processing pipeline
-# applied to the weld inspection data, showing all steps from raw data to final analysis.
-#
-# ### Pipeline Steps:
-# 1. Load raw RF data
-# 2. Apply bandpass filter (2-10 MHz)
-# 3. Extract envelope (Hilbert transform)
-# 4. Log compression (60 dB dynamic range)
-# 5. Detect echoes (peak finding)
-# 6. Classify and report results
+# Now we apply the complete signal processing pipeline to the NDT data.
 
 # %%
 if real_rf_data is not None:
@@ -1074,23 +857,8 @@ else:
     print("No real RF data available. Using synthetic data only.")
 
 # %% [markdown]
-# ### Pipeline Analysis: Key Takeaways
-#
-# The complete signal processing pipeline successfully:
-#
-# 1. **Loads and validates data**: Confirms sampling parameters and material properties
-# 2. **Filters noise**: Bandpass filter removes out-of-band interference
-# 3. **Extracts envelope**: Hilbert transform provides amplitude information
-# 4. **Detects echoes**: Automated peak finding locates all significant reflections
-# 5. **Measures thickness**: Time-of-flight calculations match expected values
-# 6. **Characterizes signal**: Frequency analysis confirms transducer performance
-#
-# **Ready for Production**: This pipeline can be adapted for real-time
-# implementation on embedded systems (FPGA, DSP) or integrated into inspection software.
-
-# %% [markdown]
 # ---
-# ## 12. Summary and Conclusions
+# ## 12. Summary
 #
 # ### Signal Processing Techniques Demonstrated
 #

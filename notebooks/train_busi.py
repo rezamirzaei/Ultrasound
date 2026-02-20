@@ -91,6 +91,7 @@ except:
 def download_busi_dataset():
     """Download BUSI dataset from Kaggle."""
     import shutil
+    import zipfile
 
     data_path.mkdir(parents=True, exist_ok=True)
 

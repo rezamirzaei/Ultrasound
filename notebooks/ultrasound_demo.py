@@ -52,16 +52,8 @@ import sys
 from pathlib import Path
 
 # Configure module path for custom ultrasound library
-# Handle both notebook and script execution contexts
-if '__file__' in dir():
-    project_root = Path(__file__).parent.parent
-else:
-    project_root = Path('.').absolute().parent
-
-# Add src directory to Python path
-src_path = project_root / 'src'
-if str(src_path) not in sys.path:
-    sys.path.insert(0, str(src_path))
+project_root = Path('.').absolute().parent
+sys.path.insert(0, str(project_root / 'src'))
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -70,13 +62,8 @@ import matplotlib.pyplot as plt
 try:
     plt.style.use('seaborn-v0_8-whitegrid')
 except:
-    try:
-        plt.style.use('seaborn-whitegrid')
-    except:
-        pass
+    pass
 
-print(f"✓ Project root: {project_root}")
-print(f"✓ Source path: {src_path}")
 print("✓ Environment configured successfully")
 
 # %% [markdown]

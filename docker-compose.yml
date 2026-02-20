@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      target: base
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    command: ["python", "main.py"]
+
+  test:
+    build:
+      context: .
+      target: test
+    command: ["pytest", "tests/", "-v", "--tb=short"]
+

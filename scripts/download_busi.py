@@ -6,15 +6,19 @@ Downloads the Breast Ultrasound Images Dataset from Kaggle.
 Dataset: https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset
 """
 
-import os
-import sys
-import zipfile
 import shutil
 from pathlib import Path
 
 def download_busi_dataset(data_dir: str = "data/busi"):
-    """
-    Download and extract the BUSI dataset.
+    """Download and extract the BUSI dataset.
+
+    This function supports two setups:
+
+    1) Kaggle API (recommended)
+       - Requires a valid Kaggle token at ``~/.kaggle/kaggle.json``.
+
+    2) Manual ZIP placement
+       - Place the downloaded Kaggle ZIP under ``data/busi/`` and re-run this script.
 
     The dataset contains 780 images:
     - Normal: 133 images
@@ -31,6 +35,28 @@ def download_busi_dataset(data_dir: str = "data/busi"):
         print(f"✓ BUSI dataset already exists at {data_path}")
         return data_path
 
+    # Manual zip fallback
+    zip_candidates = sorted(data_path.glob("*.zip"))
+    if zip_candidates:
+        import zipfile
+
+        zip_path = zip_candidates[0]
+        print(f"Found a ZIP file at {zip_path}. Extracting...")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(data_path)
+
+        dataset_subdir = data_path / "Dataset_BUSI_with_GT"
+        if dataset_subdir.exists():
+            for folder in ["benign", "malignant", "normal"]:
+                src = dataset_subdir / folder
+                dst = data_path / folder
+                if src.exists() and not dst.exists():
+                    shutil.move(str(src), str(dst))
+            shutil.rmtree(dataset_subdir)
+
+        print(f"✓ Extracted BUSI dataset to {data_path}")
+        return data_path
+
     print("Downloading BUSI dataset from Kaggle...")
     print("=" * 50)
 
@@ -40,31 +66,31 @@ def download_busi_dataset(data_dir: str = "data/busi"):
         api = KaggleApi()
         api.authenticate()
 
-        # Download dataset
         api.dataset_download_files(
-            'aryashah2k/breast-ultrasound-images-dataset',
+            "aryashah2k/breast-ultrasound-images-dataset",
             path=str(data_path),
-            unzip=True
+            unzip=True,
         )
 
-        # Reorganize files if needed
         dataset_subdir = data_path / "Dataset_BUSI_with_GT"
         if dataset_subdir.exists():
             for folder in ["benign", "malignant", "normal"]:
                 src = dataset_subdir / folder
                 dst = data_path / folder
                 if src.exists():
+                    if dst.exists():
+                        continue
                     shutil.move(str(src), str(dst))
             shutil.rmtree(dataset_subdir)
 
         print(f"✓ Dataset downloaded to {data_path}")
 
     except Exception as e:
-        print(f"Kaggle download failed: {e}")
-        print("\nTo download manually:")
-        print("1. Go to: https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dataset")
-        print("2. Download and extract to: data/busi/")
-        print("3. Ensure folders exist: data/busi/benign/, data/busi/malignant/, data/busi/normal/")
+        print(f"✗ Kaggle download failed: {e}")
+        print("\nManual download option:")
+        print("- Download the dataset ZIP from Kaggle and place it under:")
+        print(f"  {data_path}")
+        print("- Then re-run this script to extract and arrange folders.")
         return None
 
     return data_path
@@ -100,6 +126,10 @@ if __name__ == "__main__":
     project_root = script_dir.parent if script_dir.name == "scripts" else script_dir
     data_dir = project_root / "data" / "busi"
 
-    download_busi_dataset(str(data_dir))
-    verify_dataset(str(data_dir))
+    out = download_busi_dataset(str(data_dir))
+    ok = verify_dataset(str(data_dir))
 
+    if not ok:
+        raise SystemExit(
+            "BUSI verification failed. Ensure data/busi contains benign/, malignant/, normal/."
+        )

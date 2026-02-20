@@ -9,13 +9,13 @@ This module provides neural network architectures for:
 These models are specifically designed/adapted for ultrasound imaging tasks.
 """
 
-from .unet import UNet, UNetSmall, AttentionUNet
-from .classifier import UltrasoundClassifier, ResNetClassifier
+from .classifier import ResNetClassifier, UltrasoundClassifier
+from .unet import AttentionUNet, UNet, UNetSmall
 
 __all__ = [
-    'UNet',
-    'UNetSmall', 
-    'AttentionUNet',
-    'UltrasoundClassifier',
-    'ResNetClassifier',
+    "UNet",
+    "UNetSmall",
+    "AttentionUNet",
+    "UltrasoundClassifier",
+    "ResNetClassifier",
 ]
