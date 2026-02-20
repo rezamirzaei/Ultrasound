@@ -1,0 +1,64 @@
+<section class="panel">
+  <h3>Run Preprocessing Preview</h3>
+  <form class="form-grid" ng-submit="vm.run()">
+    <label>
+      BUSI Class
+      <select ng-model="vm.form.class_name">
+        <option value="benign">benign</option>
+        <option value="malignant">malignant</option>
+        <option value="normal">normal</option>
+      </select>
+    </label>
+    <label>
+      Sample Index
+      <input type="number" min="0" ng-model="vm.form.sample_index" />
+    </label>
+    <label>
+      TV Lambda
+      <input type="number" step="0.01" min="0.01" ng-model="vm.form.lambda_tv" />
+    </label>
+    <label>
+      Rho
+      <input type="number" step="0.1" min="0.1" ng-model="vm.form.rho" />
+    </label>
+    <label>
+      Iterations
+      <input type="number" min="5" max="200" ng-model="vm.form.n_iter" />
+    </label>
+    <label>
+      CLAHE Clip
+      <input type="number" step="0.1" min="0.1" max="20" ng-model="vm.form.clip_limit" />
+    </label>
+    <div class="form-actions">
+      <button class="btn" type="submit" ng-disabled="vm.loading">
+        {{ vm.loading ? 'Running...' : 'Run Preview' }}
+      </button>
+    </div>
+  </form>
+</section>
+
+<section class="panel error" ng-if="vm.error">
+  <p>{{ vm.error }}</p>
+</section>
+
+<section ng-if="vm.preview" class="panel">
+  <h3>Result</h3>
+  <p class="note">Recommended method by SSIM: <strong>{{ vm.preview.recommendation }}</strong></p>
+
+  <div class="image-grid">
+    <article>
+      <h4>Original</h4>
+      <img ng-src="{{ vm.preview.original_image_data_url }}" alt="Original" />
+    </article>
+    <article ng-repeat="method in vm.preview.methods">
+      <h4>{{ method.name }}</h4>
+      <img ng-src="{{ method.image_data_url }}" alt="{{ method.name }}" />
+      <ul class="mini-metrics">
+        <li>RMSE: {{ method.metrics.rmse | number:2 }}</li>
+        <li>PSNR: {{ method.metrics.psnr | number:2 }}</li>
+        <li>SSIM: {{ method.metrics.ssim | number:3 }}</li>
+        <li>CV: {{ method.metrics.cv | number:3 }}</li>
+      </ul>
+    </article>
+  </div>
+</section>

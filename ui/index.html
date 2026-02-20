@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" ng-app="inPhaseApp">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>inPhase Ultrasound Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/styles.css" />
+  </head>
+  <body ng-controller="MainController as main">
+    <div class="shell-bg"></div>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <h1>inPhase</h1>
+          <p>Ultrasound Control Room</p>
+        </div>
+        <nav>
+          <a ng-class="{active: main.isActive('/dashboard')}" href="#/dashboard">Dashboard</a>
+          <a ng-class="{active: main.isActive('/preprocessing')}" href="#/preprocessing">Preprocessing Lab</a>
+          <a ng-class="{active: main.isActive('/ndt')}" href="#/ndt">NDT Explorer</a>
+        </nav>
+        <div class="sidebar-footer">
+          <span>REST API</span>
+          <code>{{ main.apiBase }}</code>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="content-header">
+          <h2>{{ main.pageTitle }}</h2>
+          <div class="status-dot" ng-class="{ok: main.apiHealthy, bad: !main.apiHealthy}"></div>
+        </header>
+        <section ng-view class="view"></section>
+      </main>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular-route.min.js"></script>
+
+    <script src="app/app.module.js"></script>
+    <script src="app/app.routes.js"></script>
+    <script src="app/services/api.service.js"></script>
+    <script src="app/components/metric-tile.component.js"></script>
+    <script src="app/controllers/main.controller.js"></script>
+    <script src="app/controllers/dashboard.controller.js"></script>
+    <script src="app/controllers/preprocessing.controller.js"></script>
+    <script src="app/controllers/ndt.controller.js"></script>
+  </body>
+</html>

@@ -48,6 +48,11 @@ inPhase/
 │   ├── models/               # Deep learning models
 │   │   ├── unet.py           # U-Net, Attention U-Net
 │   │   └── classifier.py     # CNN, ResNet classifiers
+│   ├── api/                  # REST API (FastAPI, MVC-style layering)
+│   │   ├── controllers/      # HTTP controllers/routers
+│   │   ├── services/         # Business logic services
+│   │   ├── repositories/     # Data access abstractions
+│   │   └── models/           # API schemas
 │   └── utils/                # Utility functions
 │       ├── io.py             # Image I/O, DICOM support
 │       ├── metrics.py        # Dice, IoU, accuracy metrics
@@ -55,6 +60,7 @@ inPhase/
 ├── tests/                    # Unit tests (pytest)
 ├── scripts/                  # Data download utilities
 ├── notebooks/                # Jupyter demos & experiments
+├── ui/                       # AngularJS MVC frontend
 ├── main.py                   # CLI entrypoint
 ├── pyproject.toml            # Project configuration
 ├── Makefile                  # Common dev commands
@@ -100,6 +106,21 @@ jupyter notebook notebooks/01_dataset_healthcheck.ipynb
 ```
 
 Notebook suite and execution order are documented in `notebooks/README.md`.
+
+### Run REST API + AngularJS UI
+
+```bash
+# Option 1
+make api
+
+# Option 2
+python scripts/run_api.py
+```
+
+Then open:
+- UI: `http://localhost:8000/ui/index.html`
+- API docs: `http://localhost:8000/docs`
+- API health: `http://localhost:8000/api/v1/health`
 
 ---
 

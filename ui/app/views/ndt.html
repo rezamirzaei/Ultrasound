@@ -1,0 +1,36 @@
+<section class="panel" ng-if="vm.loading">
+  <p>Loading NDT samples...</p>
+</section>
+
+<section class="panel error" ng-if="vm.error">
+  <p>{{ vm.error }}</p>
+</section>
+
+<section ng-if="!vm.loading" class="grid-2">
+  <div class="panel">
+    <h3>Available Samples</h3>
+    <ul class="list selectable">
+      <li
+        ng-repeat="sample in vm.samples"
+        ng-click="vm.loadDetail(sample.name)"
+        ng-class="{active: vm.selectedName === sample.name}"
+      >
+        <span>{{ sample.name }}</span>
+        <strong>{{ sample.n_defects }} defects</strong>
+      </li>
+    </ul>
+  </div>
+
+  <div class="panel" ng-if="vm.selected">
+    <h3>Sample Detail</h3>
+    <ul class="list">
+      <li><span>Name</span><strong>{{ vm.selected.name }}</strong></li>
+      <li><span>Points</span><strong>{{ vm.selected.n_points }}</strong></li>
+      <li><span>fs (MHz)</span><strong>{{ vm.selected.fs_hz / 1000000 | number:2 }}</strong></li>
+      <li><span>fc (MHz)</span><strong>{{ vm.selected.fc_hz / 1000000 | number:2 }}</strong></li>
+      <li><span>Thickness (mm)</span><strong>{{ vm.selected.thickness_mm | number:2 }}</strong></li>
+      <li><span>Defects</span><strong>{{ vm.selected.n_defects }}</strong></li>
+    </ul>
+    <p class="note">{{ vm.selected.description }}</p>
+  </div>
+</section>

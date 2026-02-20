@@ -1,0 +1,37 @@
+<section class="panel" ng-if="vm.loading">
+  <p>Loading dashboard...</p>
+</section>
+
+<section class="panel error" ng-if="vm.error">
+  <p>{{ vm.error }}</p>
+</section>
+
+<section ng-if="vm.summary && !vm.loading" class="grid-2">
+  <div class="panel">
+    <h3>System Overview</h3>
+    <div class="metric-grid">
+      <metric-tile label="BUSI Total" value="vm.summary.busi_total" tone="accent"></metric-tile>
+      <metric-tile label="NDT Samples" value="vm.summary.ndt_samples" tone="accent"></metric-tile>
+      <metric-tile label="Generated" value="vm.summary.generated_at | date:'medium'" tone="muted"></metric-tile>
+    </div>
+    <button class="btn" ng-click="vm.refresh()">Refresh</button>
+  </div>
+
+  <div class="panel">
+    <h3>BUSI Distribution</h3>
+    <ul class="list">
+      <li>
+        <span>Benign</span>
+        <strong>{{ vm.summary.busi_counts.benign }}</strong>
+      </li>
+      <li>
+        <span>Malignant</span>
+        <strong>{{ vm.summary.busi_counts.malignant }}</strong>
+      </li>
+      <li>
+        <span>Normal</span>
+        <strong>{{ vm.summary.busi_counts.normal }}</strong>
+      </li>
+    </ul>
+  </div>
+</section>

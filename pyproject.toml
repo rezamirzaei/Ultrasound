@@ -26,6 +26,8 @@ dependencies = [
     "pillow>=10.0.0",
     "tqdm>=4.65.0",
     "seaborn>=0.12.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +37,7 @@ dev = [
     "black>=23.0.0",
     "isort>=5.12.0",
     "mypy>=1.0.0",
+    "httpx>=0.27.0",
 ]
 notebooks = [
     "jupyter>=1.0.0",
@@ -43,6 +46,9 @@ notebooks = [
 
 [project.urls]
 Homepage = "https://github.com/rezamirzaei/ultrasound-imaging-toolkit"
+
+[project.scripts]
+ultrasound-api = "ultrasound.api.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

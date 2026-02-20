@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck clean docker-test demo
+.PHONY: install dev test lint format typecheck clean docker-test demo api
 
 install:
 	python -m pip install -e .
@@ -30,3 +30,6 @@ demo:
 
 docker-test:
 	docker compose run --rm test
+
+api:
+	python scripts/run_api.py
