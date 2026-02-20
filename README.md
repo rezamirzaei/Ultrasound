@@ -96,8 +96,10 @@ This will:
 ### Jupyter Notebook
 
 ```bash
-jupyter notebook notebooks/ultrasound_demo.ipynb
+jupyter notebook notebooks/01_dataset_healthcheck.ipynb
 ```
+
+Notebook suite and execution order are documented in `notebooks/README.md`.
 
 ---
 
