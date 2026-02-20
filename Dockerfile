@@ -15,6 +15,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY main.py ./
+COPY ui/ ./ui/
 
 RUN python -m pip install --upgrade pip \
     && pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple \
@@ -25,7 +26,7 @@ RUN python -m pip install --upgrade pip \
 RUN useradd --create-home --shell /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "ultrasound.api"]
 
 
 FROM base AS test

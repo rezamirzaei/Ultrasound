@@ -115,12 +115,21 @@ make api
 
 # Option 2
 python scripts/run_api.py
+
+# Option 3 (Docker Compose)
+docker compose up --build
 ```
 
 Then open:
 - UI: `http://localhost:8000/ui/index.html`
 - API docs: `http://localhost:8000/docs`
 - API health: `http://localhost:8000/api/v1/health`
+
+Run tests in Docker explicitly:
+
+```bash
+docker compose --profile test run --rm test
+```
 
 ---
 

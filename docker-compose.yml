@@ -3,14 +3,17 @@ services:
     build:
       context: .
       target: base
+    ports:
+      - "8000:8000"
     volumes:
       - ./data:/app/data
       - ./outputs:/app/outputs
-    command: ["python", "main.py"]
+      - ./ui:/app/ui
+    command: ["python", "-m", "ultrasound.api"]
 
   test:
+    profiles: ["test"]
     build:
       context: .
       target: test
     command: ["pytest", "tests/", "-v", "--tb=short"]
-
