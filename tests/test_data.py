@@ -25,10 +25,13 @@ def test_synthetic_mask_matches_darker_lesion_region(tmp_path: Path):
     create_sample_data(str(output_dir), num_samples=1)
 
     for class_name in ("benign", "malignant"):
-        image_path = next(
-            p for p in (output_dir / class_name).glob("*.png") if "_mask" not in p.stem
-        )
-        mask_path = Path(str(image_path).replace(".png", "_mask.png"))
+        class_dir = output_dir / class_name
+        image_files = sorted(p for p in class_dir.glob("*.png") if "_mask" not in p.stem)
+        assert image_files
+
+        image_path = image_files[0]
+        mask_path = class_dir / f"{image_path.stem}_mask.png"
+        assert mask_path.exists()
 
         image = np.array(Image.open(image_path).convert("L"), dtype=np.float64)
         mask = np.array(Image.open(mask_path), dtype=np.uint8) > 0
