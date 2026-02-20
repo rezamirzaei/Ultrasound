@@ -70,12 +70,17 @@ select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
 files = ["src/ultrasound", "tests"]
 exclude = "(^notebooks/|^scripts/)"
+
+[[tool.mypy.overrides]]
+module = ["torch", "torch.*", "torchvision", "torchvision.*"]
+follow_imports = "skip"
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
