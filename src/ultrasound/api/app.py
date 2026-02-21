@@ -213,4 +213,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     return app
 
 
-app = create_app()
+def __getattr__(name: str) -> object:
+    if name == "app":
+        _app = create_app()
+        globals()["app"] = _app
+        return _app
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
