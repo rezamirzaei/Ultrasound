@@ -6,9 +6,6 @@ import logging
 import os
 from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
-
 logger = logging.getLogger("inphase.migrations")
 
 
@@ -16,7 +13,9 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def _alembic_config(database_url: str | None = None) -> Config:
+def _alembic_config(database_url: str | None = None):
+    from alembic.config import Config
+
     root = _project_root()
     cfg = Config(str(root / "alembic.ini"))
     resolved_url = database_url or os.getenv("INPHASE_DATABASE_URL")
@@ -27,6 +26,15 @@ def _alembic_config(database_url: str | None = None) -> Config:
 
 def upgrade_to_head(database_url: str | None = None, auto_stamp_legacy: bool = True) -> None:
     """Upgrade schema to latest revision; optionally stamp legacy pre-Alembic DBs."""
+    try:
+        from alembic import command
+    except ModuleNotFoundError:
+        logger.warning(
+            "Alembic is not installed in this runtime image. "
+            "Skipping migration step and continuing startup."
+        )
+        return
+
     config = _alembic_config(database_url=database_url)
 
     try:

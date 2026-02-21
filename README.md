@@ -136,7 +136,7 @@ Default sign-in accounts (change with `INPHASE_*_PASSWORD` env vars):
 Database:
 - Default DB URL: `sqlite:///data/inphase.sqlite3`
 - Override with `INPHASE_DATABASE_URL` (for Postgres/MySQL in production)
-- Startup applies Alembic migrations automatically (set `INPHASE_SKIP_MIGRATIONS=1` to bypass)
+- Startup attempts Alembic migrations automatically (set `INPHASE_SKIP_MIGRATIONS=1` to bypass)
 - Legacy pre-Alembic databases are auto-stamped by default (`INPHASE_MIGRATION_AUTO_STAMP=0` disables this)
 - Auth users and token sessions are persisted in DB tables (`auth_users`, `auth_tokens`)
 - Set `INPHASE_FORCE_DEFAULT_USERS=1` to rotate default seeded passwords/roles from env.
