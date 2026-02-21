@@ -17,8 +17,10 @@ class DataIngestionService:
     def resync_all(self) -> DatasetResyncResponse:
         busi_rows = self.dataset_repository.sync_busi_from_filesystem()
         ndt_rows = self.dataset_repository.sync_ndt_from_filesystem()
+        industrial_rows = self.dataset_repository.sync_industrial_from_filesystem()
         return DatasetResyncResponse(
             generated_at=datetime.now(tz=timezone.utc),
             busi_rows_synced=int(busi_rows),
             ndt_rows_synced=int(ndt_rows),
+            industrial_rows_synced=int(industrial_rows),
         )

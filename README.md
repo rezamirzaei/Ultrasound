@@ -141,6 +141,7 @@ Database:
 UI modules:
 - Dashboard: project summary + quick navigation
 - BUSI Explorer: browse images/masks by class and sample index
+- Industrial Coverage: SQL-backed visibility into steel/NEU/casting splits and classes
 - BUSI Learning Monitor: run SQL-backed training and inspect train/test accuracy curves
 - Preprocessing Lab: run Lee/Frost/CLAHE/ADMM-TV and compare metrics
 - NDT Explorer: inspect sample metadata, fused defect detections, and sampled RF waveforms
@@ -150,6 +151,8 @@ Key API endpoints used by the UI:
 - `GET /api/v1/dashboard/readiness`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/datasets/busi/samples/{class_name}/{sample_index}`
+- `GET /api/v1/datasets/industrial/summary`
+- `GET /api/v1/datasets/industrial/samples/{dataset_name}/{split}/{class_name}/{sample_index}`
 - `GET /api/v1/datasets/busi/training/latest?include_normal=false`
 - `POST /api/v1/datasets/busi/training/run`
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
@@ -158,6 +161,7 @@ Key API endpoints used by the UI:
 
 Validation & reliability:
 - BUSI and NDT datasets are persisted in SQLite (`data/inphase.sqlite3`) and served through SQLAlchemy ORM repositories.
+- Steel defect, NEU surface, and casting datasets are also persisted in DB and exposed via service endpoints.
 - BUSI learning service trains from SQL-stored samples and persists run metrics + epoch curves.
 - API error analytics are persisted in DB for durable operational dashboards.
 - Auth is DB-backed with salted PBKDF2 password hashes and revocable token sessions.

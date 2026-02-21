@@ -14,6 +14,8 @@ from ultrasound.api.models.schemas import (
     BusiTrainingResponse,
     DashboardSummaryResponse,
     DataReadinessResponse,
+    IndustrialDatasetSummaryResponse,
+    IndustrialSamplePreview,
     NdtSampleDetail,
     NdtSampleSummary,
     NdtSignalPreview,
@@ -45,6 +47,39 @@ def get_dashboard_readiness(
 def get_busi_counts(container: ApplicationContainer = Depends(get_container)) -> dict[str, int]:
     """Return BUSI class counts."""
     return container.dashboard_service.get_busi_counts()
+
+
+@router.get("/datasets/industrial/summary", response_model=IndustrialDatasetSummaryResponse)
+def get_industrial_summary(
+    container: ApplicationContainer = Depends(get_container),
+) -> IndustrialDatasetSummaryResponse:
+    """Return class/split coverage for steel, NEU, and casting datasets."""
+    return container.dashboard_service.get_industrial_summary()
+
+
+@router.get(
+    "/datasets/industrial/samples/{dataset_name}/{split}/{class_name}/{sample_index}",
+    response_model=IndustrialSamplePreview,
+)
+def get_industrial_sample_preview(
+    dataset_name: str,
+    split: str,
+    class_name: str,
+    sample_index: int,
+    container: ApplicationContainer = Depends(get_container),
+) -> IndustrialSamplePreview:
+    """Return one industrial sample preview for selected dataset/split/class."""
+    try:
+        return container.dashboard_service.get_industrial_sample_preview(
+            dataset_name=dataset_name,
+            split=split,
+            class_name=class_name,
+            sample_index=sample_index,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/datasets/busi/training/latest", response_model=BusiTrainingResponse)

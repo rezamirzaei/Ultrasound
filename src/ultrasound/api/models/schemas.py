@@ -18,6 +18,8 @@ class DashboardSummaryResponse(BaseModel):
     busi_counts: Dict[str, int]
     busi_total: int
     ndt_samples: int
+    industrial_total: int = Field(default=0, ge=0)
+    industrial_datasets: Dict[str, int] = Field(default_factory=dict)
     generated_at: datetime
 
 
@@ -26,6 +28,7 @@ class DataReadinessResponse(BaseModel):
     busi_available_classes: List[str]
     busi_missing_classes: List[str]
     ndt_samples: int
+    industrial_datasets: Dict[str, int] = Field(default_factory=dict)
     issues: List[str]
     generated_at: datetime
 
@@ -147,6 +150,33 @@ class BusiTrainingResponse(BaseModel):
     notes: str | None = None
 
 
+class IndustrialDatasetRow(BaseModel):
+    dataset_name: str
+    split: str
+    class_name: str
+    sample_count: int = Field(ge=0)
+
+
+class IndustrialDatasetSummaryResponse(BaseModel):
+    generated_at: datetime
+    total_samples: int = Field(ge=0)
+    totals_by_dataset: Dict[str, int] = Field(default_factory=dict)
+    rows: List[IndustrialDatasetRow] = Field(default_factory=list)
+
+
+class IndustrialSamplePreview(BaseModel):
+    dataset_name: str
+    split: str
+    class_name: str
+    requested_index: int = Field(ge=0)
+    resolved_index: int = Field(ge=0)
+    total_samples: int = Field(gt=0)
+    image_shape: List[int]
+    has_annotation: bool = False
+    image_data_url: str
+    relative_path: str
+
+
 class PreprocessingRequest(BaseModel):
     class_name: str = Field(default="benign", pattern="^(benign|malignant|normal)$")
     sample_index: int = Field(default=0, ge=0)
@@ -233,3 +263,4 @@ class DatasetResyncResponse(BaseModel):
     generated_at: datetime
     busi_rows_synced: int = Field(ge=0)
     ndt_rows_synced: int = Field(ge=0)
+    industrial_rows_synced: int = Field(default=0, ge=0)

@@ -12,6 +12,7 @@
     <div class="metric-grid">
       <metric-tile label="BUSI Total" value="vm.summary.busi_total" tone="accent"></metric-tile>
       <metric-tile label="NDT Samples" value="vm.summary.ndt_samples" tone="accent"></metric-tile>
+      <metric-tile label="Industrial Samples" value="vm.summary.industrial_total" tone="accent"></metric-tile>
       <metric-tile label="Generated" value="vm.summary.generated_at | date:'medium'" tone="muted"></metric-tile>
     </div>
     <div class="toolbar">
@@ -30,6 +31,37 @@
       </li>
     </ul>
   </div>
+</section>
+
+<section class="panel" ng-if="vm.industrialSummary && !vm.loading">
+  <h3>Industrial Dataset Coverage</h3>
+  <p class="note">
+    Steel/NEU/Casting datasets are now persisted in SQL and exposed via service endpoints.
+  </p>
+  <ul class="list compact" ng-if="vm.industrialSummary.totals_by_dataset">
+    <li ng-repeat="(datasetName, total) in vm.industrialSummary.totals_by_dataset">
+      <span>{{ datasetName }}</span>
+      <strong>{{ total }}</strong>
+    </li>
+  </ul>
+  <table class="result-table" ng-if="vm.industrialRows.length">
+    <thead>
+      <tr>
+        <th>Dataset</th>
+        <th>Split</th>
+        <th>Class</th>
+        <th>Samples</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr ng-repeat="row in vm.industrialRows">
+        <td>{{ row.dataset_name }}</td>
+        <td>{{ row.split }}</td>
+        <td>{{ row.class_name }}</td>
+        <td>{{ row.sample_count }}</td>
+      </tr>
+    </tbody>
+  </table>
 </section>
 
 <section ng-if="vm.readiness && !vm.loading" class="panel" ng-class="{error: vm.readiness.status !== 'ok'}">
@@ -198,6 +230,7 @@
     <ul class="list compact" ng-if="vm.resyncResult">
       <li><span>BUSI Rows Synced</span><strong>{{ vm.resyncResult.busi_rows_synced }}</strong></li>
       <li><span>NDT Rows Synced</span><strong>{{ vm.resyncResult.ndt_rows_synced }}</strong></li>
+      <li><span>Industrial Rows Synced</span><strong>{{ vm.resyncResult.industrial_rows_synced }}</strong></li>
       <li><span>Synced At</span><strong>{{ vm.resyncResult.generated_at | date:'medium' }}</strong></li>
     </ul>
     <p class="note" ng-if="!vm.opsSummary">No server error summary available.</p>

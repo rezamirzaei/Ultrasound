@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from ultrasound.api.app import create_app
 from ultrasound.api.config import AppConfig
@@ -45,6 +46,33 @@ def _create_ui_fixture(ui_dir: Path) -> None:
     )
 
 
+def _create_industrial_fixture(data_dir: Path) -> None:
+    """Create minimal industrial dataset folders for ORM sync tests."""
+    steel_image = data_dir / "steel_defect" / "NEU Metal Surface Defects Data" / "train" / "Crazing"
+    steel_image.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((32, 32), 120, dtype=np.uint8), mode="L").save(steel_image / "Cr_1.bmp")
+
+    neu_images = data_dir / "neu_surface" / "NEU-DET" / "train" / "images" / "crazing"
+    neu_annotations = data_dir / "neu_surface" / "NEU-DET" / "train" / "annotations"
+    neu_images.mkdir(parents=True, exist_ok=True)
+    neu_annotations.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((24, 24), 180, dtype=np.uint8), mode="L").save(
+        neu_images / "crazing_1.jpg"
+    )
+    (neu_annotations / "crazing_1.xml").write_text(
+        "<annotation><object><name>crazing</name></object></annotation>",
+        encoding="utf-8",
+    )
+
+    casting_image = (
+        data_dir / "casting_defect" / "casting_data" / "casting_data" / "train" / "def_front"
+    )
+    casting_image.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((28, 28), 200, dtype=np.uint8), mode="L").save(
+        casting_image / "cast_def_1.jpeg"
+    )
+
+
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     """Create an isolated app instance with synthetic data and UI fixtures."""
@@ -57,6 +85,7 @@ def client(tmp_path: Path) -> TestClient:
     create_sample_data(str(busi_dir), num_samples=2)
     _create_ndt_fixture(ndt_dir)
     _create_ui_fixture(ui_dir)
+    _create_industrial_fixture(data_dir)
 
     config = AppConfig(
         project_root=tmp_path,
@@ -517,6 +546,41 @@ def test_busi_sample_preview_endpoint(client: TestClient) -> None:
     assert 0.0 <= payload["lesion_ratio"] <= 1.0
 
 
+def test_industrial_summary_and_sample_preview(client: TestClient) -> None:
+    headers = _auth_headers(client)
+
+    summary_response = client.get("/api/v1/datasets/industrial/summary", headers=headers)
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total_samples"] >= 3
+    assert summary["totals_by_dataset"]["steel_defect"] >= 1
+    assert summary["totals_by_dataset"]["neu_surface"] >= 1
+    assert summary["totals_by_dataset"]["casting_defect"] >= 1
+    assert len(summary["rows"]) >= 3
+
+    steel_preview = client.get(
+        "/api/v1/datasets/industrial/samples/steel_defect/train/crazing/0",
+        headers=headers,
+    )
+    assert steel_preview.status_code == 200
+    steel_payload = steel_preview.json()
+    assert steel_payload["dataset_name"] == "steel_defect"
+    assert steel_payload["split"] == "train"
+    assert steel_payload["class_name"] == "crazing"
+    assert steel_payload["total_samples"] >= 1
+    assert steel_payload["image_data_url"].startswith("data:image/png;base64,")
+    assert steel_payload["has_annotation"] is False
+
+    neu_preview = client.get(
+        "/api/v1/datasets/industrial/samples/neu_surface/train/crazing/0",
+        headers=headers,
+    )
+    assert neu_preview.status_code == 200
+    neu_payload = neu_preview.json()
+    assert neu_payload["dataset_name"] == "neu_surface"
+    assert neu_payload["has_annotation"] is True
+
+
 def test_busi_training_endpoints(client: TestClient) -> None:
     viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
 
@@ -637,5 +701,6 @@ def test_ops_error_analytics_admin_only(client: TestClient) -> None:
     resync_payload = resync.json()
     assert resync_payload["busi_rows_synced"] >= 0
     assert resync_payload["ndt_rows_synced"] >= 0
+    assert resync_payload["industrial_rows_synced"] >= 0
     assert len(recent_payload) >= 1
     assert "request_id" in recent_payload[0]

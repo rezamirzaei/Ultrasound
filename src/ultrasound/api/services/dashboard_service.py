@@ -10,6 +10,9 @@ from ultrasound.api.models.schemas import (
     BusiSamplePreview,
     DashboardSummaryResponse,
     DataReadinessResponse,
+    IndustrialDatasetRow,
+    IndustrialDatasetSummaryResponse,
+    IndustrialSamplePreview,
     NdtDefect,
     NdtDefectMarker,
     NdtSampleDetail,
@@ -39,16 +42,30 @@ class DashboardService:
     def get_summary(self) -> DashboardSummaryResponse:
         busi_counts = self.dataset_repository.get_busi_counts()
         ndt_samples = self.dataset_repository.list_ndt_samples()
+        industrial_counts = self.dataset_repository.get_industrial_counts()
+        industrial_totals = {
+            dataset_name: int(
+                sum(
+                    int(class_count)
+                    for split_counts in dataset_splits.values()
+                    for class_count in split_counts.values()
+                )
+            )
+            for dataset_name, dataset_splits in industrial_counts.items()
+        }
         return DashboardSummaryResponse(
             busi_counts=busi_counts,
             busi_total=int(sum(busi_counts.values())),
             ndt_samples=len(ndt_samples),
+            industrial_total=int(sum(industrial_totals.values())),
+            industrial_datasets=industrial_totals,
             generated_at=datetime.now(tz=timezone.utc),
         )
 
     def get_data_readiness(self) -> DataReadinessResponse:
         busi_counts = self.dataset_repository.get_busi_counts()
         ndt_samples = self.dataset_repository.list_ndt_samples()
+        industrial_counts = self.dataset_repository.get_industrial_counts()
 
         busi_available_classes = [name for name, count in busi_counts.items() if count > 0]
         busi_missing_classes = [name for name, count in busi_counts.items() if count <= 0]
@@ -60,6 +77,21 @@ class DashboardService:
             )
         if len(ndt_samples) == 0:
             issues.append("No NDT samples were found in data/ascan_signals/ndt_samples.")
+        empty_industrial = []
+        for dataset_name, split_counts in industrial_counts.items():
+            total = int(
+                sum(
+                    int(class_count)
+                    for class_map in split_counts.values()
+                    for class_count in class_map.values()
+                )
+            )
+            if total <= 0:
+                empty_industrial.append(dataset_name)
+        if empty_industrial:
+            issues.append(
+                "Industrial datasets with no samples in DB: " + ", ".join(sorted(empty_industrial))
+            )
 
         status = "ok" if not issues else "warning"
         return DataReadinessResponse(
@@ -67,6 +99,16 @@ class DashboardService:
             busi_available_classes=sorted(busi_available_classes),
             busi_missing_classes=sorted(busi_missing_classes),
             ndt_samples=len(ndt_samples),
+            industrial_datasets={
+                dataset_name: int(
+                    sum(
+                        int(class_count)
+                        for class_map in split_counts.values()
+                        for class_count in class_map.values()
+                    )
+                )
+                for dataset_name, split_counts in industrial_counts.items()
+            },
             issues=issues,
             generated_at=datetime.now(tz=timezone.utc),
         )
@@ -94,6 +136,59 @@ class DashboardService:
             lesion_ratio=lesion_ratio,
             image_data_url=self.media_service.as_png_data_url(sample.image_rgb),
             mask_data_url=self.media_service.as_png_data_url(mask_binary),
+        )
+
+    def get_industrial_summary(self) -> IndustrialDatasetSummaryResponse:
+        counts = self.dataset_repository.get_industrial_counts()
+        rows: list[IndustrialDatasetRow] = []
+        totals_by_dataset: dict[str, int] = {}
+        for dataset_name, split_map in sorted(counts.items()):
+            dataset_total = 0
+            for split_name, class_map in sorted(split_map.items()):
+                for class_name, sample_count in sorted(class_map.items()):
+                    n = int(sample_count)
+                    dataset_total += n
+                    rows.append(
+                        IndustrialDatasetRow(
+                            dataset_name=dataset_name,
+                            split=split_name,
+                            class_name=class_name,
+                            sample_count=n,
+                        )
+                    )
+            totals_by_dataset[dataset_name] = dataset_total
+
+        return IndustrialDatasetSummaryResponse(
+            generated_at=datetime.now(tz=timezone.utc),
+            total_samples=int(sum(totals_by_dataset.values())),
+            totals_by_dataset=totals_by_dataset,
+            rows=rows,
+        )
+
+    def get_industrial_sample_preview(
+        self,
+        dataset_name: str,
+        split: str,
+        class_name: str,
+        sample_index: int,
+    ) -> IndustrialSamplePreview:
+        sample = self.dataset_repository.get_industrial_sample(
+            dataset_name=dataset_name,
+            split=split,
+            class_name=class_name,
+            index=sample_index,
+        )
+        return IndustrialSamplePreview(
+            dataset_name=sample.dataset_name,
+            split=sample.split,
+            class_name=sample.class_name,
+            requested_index=sample.requested_index,
+            resolved_index=sample.resolved_index,
+            total_samples=sample.total_samples,
+            image_shape=[int(v) for v in sample.image_rgb.shape],
+            has_annotation=sample.has_annotation,
+            image_data_url=self.media_service.as_png_data_url(sample.image_rgb),
+            relative_path=sample.relative_path,
         )
 
     def list_ndt_samples(self) -> list[NdtSampleSummary]:

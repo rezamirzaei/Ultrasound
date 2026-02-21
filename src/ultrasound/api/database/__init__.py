@@ -7,6 +7,7 @@ from .models import (
     BusiSampleORM,
     BusiTrainingRunORM,
     DatasetMetaORM,
+    IndustrialSampleORM,
     NdtDefectORM,
     NdtSampleORM,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "BusiTrainingRunORM",
     "DatabaseSessionManager",
     "DatasetMetaORM",
+    "IndustrialSampleORM",
     "NdtDefectORM",
     "NdtSampleORM",
 ]

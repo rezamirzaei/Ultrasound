@@ -17,6 +17,7 @@ from ultrasound.api.database.models import (
     BusiSampleORM,
     BusiTrainingRunORM,
     DatasetMetaORM,
+    IndustrialSampleORM,
     NdtDefectORM,
     NdtSampleORM,
 )
@@ -25,6 +26,7 @@ from ultrasound.api.models.domain import (
     BusiSampleRecord,
     BusiTrainingRunRecord,
     BusiTrainingSampleRecord,
+    IndustrialSampleRecord,
     NdtDefectRecord,
     NdtSampleRecord,
 )
@@ -35,6 +37,7 @@ class DatasetRepository:
 
     CLASSES = ("benign", "malignant", "normal")
     CLASS_TO_LABEL = {"benign": 0, "malignant": 1, "normal": 2}
+    INDUSTRIAL_DATASETS = ("steel_defect", "neu_surface", "casting_defect")
 
     def __init__(self, config: AppConfig, db: DatabaseSessionManager):
         self.config = config
@@ -102,6 +105,95 @@ class DatasetRepository:
         train_count = max(1, min(train_count, n_samples - 1))
         return train_count
 
+    def _industrial_roots(self) -> dict[str, Path]:
+        return {
+            "steel_defect": self.config.data_dir / "steel_defect",
+            "neu_surface": self.config.data_dir / "neu_surface",
+            "casting_defect": self.config.data_dir / "casting_defect",
+        }
+
+    def _collect_industrial_sources(self) -> list[tuple[str, str, str, Path, Path | None]]:
+        records: list[tuple[str, str, str, Path, Path | None]] = []
+        roots = self._industrial_roots()
+
+        steel_root = roots["steel_defect"] / "NEU Metal Surface Defects Data"
+        if steel_root.exists():
+            for split in ("train", "valid", "test"):
+                split_dir = steel_root / split
+                if not split_dir.exists():
+                    continue
+                for class_dir in sorted(path for path in split_dir.iterdir() if path.is_dir()):
+                    for image_path in sorted(class_dir.glob("*.bmp")):
+                        records.append(
+                            (
+                                "steel_defect",
+                                split,
+                                class_dir.name.lower(),
+                                image_path,
+                                None,
+                            )
+                        )
+
+        neu_root = roots["neu_surface"] / "NEU-DET"
+        if neu_root.exists():
+            for split in ("train", "validation"):
+                images_root = neu_root / split / "images"
+                ann_root = neu_root / split / "annotations"
+                if not images_root.exists():
+                    continue
+                for class_dir in sorted(path for path in images_root.iterdir() if path.is_dir()):
+                    for image_path in sorted(class_dir.glob("*")):
+                        if image_path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp"}:
+                            continue
+                        annotation_path = ann_root / f"{image_path.stem}.xml"
+                        records.append(
+                            (
+                                "neu_surface",
+                                split,
+                                class_dir.name.lower(),
+                                image_path,
+                                annotation_path if annotation_path.exists() else None,
+                            )
+                        )
+
+        casting_train_test_root = (
+            self.config.data_dir / "casting_defect" / "casting_data" / "casting_data"
+        )
+        if casting_train_test_root.exists():
+            for split in ("train", "test"):
+                split_dir = casting_train_test_root / split
+                if not split_dir.exists():
+                    continue
+                for class_dir in sorted(path for path in split_dir.iterdir() if path.is_dir()):
+                    for image_path in sorted(class_dir.glob("*.jpeg")):
+                        records.append(
+                            (
+                                "casting_defect",
+                                split,
+                                class_dir.name.lower(),
+                                image_path,
+                                None,
+                            )
+                        )
+
+        casting_flat_root = (
+            self.config.data_dir / "casting_defect" / "casting_512x512" / "casting_512x512"
+        )
+        if casting_flat_root.exists():
+            for class_dir in sorted(path for path in casting_flat_root.iterdir() if path.is_dir()):
+                for image_path in sorted(class_dir.glob("*.jpeg")):
+                    records.append(
+                        (
+                            "casting_defect",
+                            "full",
+                            class_dir.name.lower(),
+                            image_path,
+                            None,
+                        )
+                    )
+
+        return records
+
     def _meta_get(self, session_key: str) -> str | None:
         with self.db.session_scope() as session:
             row = session.get(DatasetMetaORM, session_key)
@@ -153,6 +245,27 @@ class DatasetRepository:
         for sample_path in sample_paths:
             stat = sample_path.stat()
             digest.update(f"{sample_path.name}:{stat.st_size}:{stat.st_mtime_ns}|".encode("utf-8"))
+        return digest.hexdigest()
+
+    def _compute_industrial_fingerprint(self) -> str:
+        digest = hashlib.sha256()
+        sources = self._collect_industrial_sources()
+        digest.update(f"industrial:{len(sources)}|".encode("utf-8"))
+        for dataset_name, split, class_name, image_path, annotation_path in sources:
+            image_stat = image_path.stat()
+            digest.update(
+                (
+                    f"{dataset_name}:{split}:{class_name}:{image_path.name}:"
+                    f"{image_stat.st_size}:{image_stat.st_mtime_ns}|"
+                ).encode("utf-8")
+            )
+            if annotation_path is not None:
+                ann_stat = annotation_path.stat()
+                digest.update(
+                    (f"{annotation_path.name}:{ann_stat.st_size}:{ann_stat.st_mtime_ns}|").encode(
+                        "utf-8"
+                    )
+                )
         return digest.hexdigest()
 
     def _build_defect_records(self, defects_obj: Any) -> list[NdtDefectRecord]:
@@ -309,6 +422,69 @@ class DatasetRepository:
 
         return inserted
 
+    def sync_industrial_from_filesystem(self) -> int:
+        fingerprint = self._compute_industrial_fingerprint()
+        if self._meta_get("industrial_fingerprint") == fingerprint:
+            return 0
+
+        inserted = 0
+        with self.db.session_scope() as session:
+            session.execute(delete(IndustrialSampleORM))
+            for (
+                dataset_name,
+                split,
+                class_name,
+                image_path,
+                annotation_path,
+            ) in self._collect_industrial_sources():
+                image_blob, width, height = self._canonical_png_rgb(image_path)
+                annotation_blob: bytes | None = None
+                if annotation_path is not None and annotation_path.exists():
+                    annotation_blob = annotation_path.read_bytes()
+                try:
+                    relative_path = str(
+                        image_path.resolve().relative_to(self.config.data_dir.resolve())
+                    )
+                except ValueError:
+                    relative_path = str(image_path.resolve())
+                source_hash = hashlib.sha256(
+                    image_blob + (annotation_blob or b"") + relative_path.encode("utf-8")
+                ).hexdigest()
+                session.add(
+                    IndustrialSampleORM(
+                        dataset_name=dataset_name,
+                        split=split,
+                        class_name=class_name,
+                        image_filename=image_path.name,
+                        relative_path=relative_path,
+                        image_blob=image_blob,
+                        annotation_blob=annotation_blob,
+                        width=width,
+                        height=height,
+                        source_hash=source_hash,
+                    )
+                )
+                inserted += 1
+
+            row = session.get(DatasetMetaORM, "industrial_fingerprint")
+            if row is None:
+                session.add(DatasetMetaORM(key="industrial_fingerprint", value=fingerprint))
+            else:
+                row.value = fingerprint
+
+        return inserted
+
+    def _ensure_industrial_seeded(self) -> None:
+        """Seed industrial tables once if DB has never been populated."""
+        fingerprint = self._meta_get("industrial_fingerprint")
+        if fingerprint:
+            return
+        with self.db.session_scope() as session:
+            existing = int(session.scalar(select(func.count(IndustrialSampleORM.id))) or 0)
+        if existing > 0:
+            return
+        self.sync_industrial_from_filesystem()
+
     def sync_from_sources(self) -> None:
         self.sync_busi_from_filesystem()
         self.sync_ndt_from_filesystem()
@@ -408,6 +584,94 @@ class DatasetRepository:
                 )
             )
         return samples
+
+    def get_industrial_counts(self) -> dict[str, dict[str, dict[str, int]]]:
+        self._ensure_industrial_seeded()
+        counts: dict[str, dict[str, dict[str, int]]] = {
+            dataset_name: {} for dataset_name in self.INDUSTRIAL_DATASETS
+        }
+        with self.db.session_scope() as session:
+            rows = session.execute(
+                select(
+                    IndustrialSampleORM.dataset_name,
+                    IndustrialSampleORM.split,
+                    IndustrialSampleORM.class_name,
+                    func.count(IndustrialSampleORM.id),
+                ).group_by(
+                    IndustrialSampleORM.dataset_name,
+                    IndustrialSampleORM.split,
+                    IndustrialSampleORM.class_name,
+                )
+            ).all()
+            for dataset_name, split, class_name, sample_count in rows:
+                dataset_bucket = counts.setdefault(str(dataset_name), {})
+                split_bucket = dataset_bucket.setdefault(str(split), {})
+                split_bucket[str(class_name)] = int(sample_count)
+        return counts
+
+    def get_industrial_sample(
+        self,
+        dataset_name: str,
+        split: str,
+        class_name: str,
+        index: int = 0,
+    ) -> IndustrialSampleRecord:
+        self._ensure_industrial_seeded()
+        if dataset_name not in self.INDUSTRIAL_DATASETS:
+            raise FileNotFoundError(
+                f"Dataset '{dataset_name}' not found. Available: {self.INDUSTRIAL_DATASETS}"
+            )
+        if index < 0:
+            raise ValueError("sample index must be >= 0")
+
+        with self.db.session_scope() as session:
+            total_samples = int(
+                session.scalar(
+                    select(func.count(IndustrialSampleORM.id)).where(
+                        IndustrialSampleORM.dataset_name == dataset_name,
+                        IndustrialSampleORM.split == split,
+                        IndustrialSampleORM.class_name == class_name,
+                    )
+                )
+                or 0
+            )
+            if total_samples <= 0:
+                raise FileNotFoundError(
+                    "No industrial samples found for "
+                    f"{dataset_name}/{split}/{class_name} in database storage."
+                )
+
+            resolved_index = int(index % total_samples)
+            sample = session.scalars(
+                select(IndustrialSampleORM)
+                .where(
+                    IndustrialSampleORM.dataset_name == dataset_name,
+                    IndustrialSampleORM.split == split,
+                    IndustrialSampleORM.class_name == class_name,
+                )
+                .order_by(IndustrialSampleORM.image_filename)
+                .offset(resolved_index)
+                .limit(1)
+            ).first()
+
+        if sample is None:
+            raise FileNotFoundError(
+                "Could not fetch industrial sample for "
+                f"{dataset_name}/{split}/{class_name} at index {index}."
+            )
+
+        image_rgb = self._decode_rgb_blob(sample.image_blob)
+        return IndustrialSampleRecord(
+            dataset_name=dataset_name,
+            split=split,
+            class_name=class_name,
+            requested_index=int(index),
+            resolved_index=resolved_index,
+            total_samples=total_samples,
+            relative_path=sample.relative_path,
+            image_rgb=image_rgb,
+            has_annotation=sample.annotation_blob is not None,
+        )
 
     def save_busi_training_run(self, run: BusiTrainingRunRecord) -> BusiTrainingRunRecord:
         payload = run.model_dump_json()

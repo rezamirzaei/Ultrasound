@@ -221,6 +221,30 @@ class BusiTrainingRunRecord(BaseModel):
     notes: str | None = None
 
 
+class IndustrialSampleRecord(BaseModel):
+    """Validated industrial defect sample from SQL storage."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    dataset_name: str
+    split: str
+    class_name: str
+    requested_index: int = Field(ge=0)
+    resolved_index: int = Field(ge=0)
+    total_samples: int = Field(gt=0)
+    relative_path: str
+    image_rgb: np.ndarray
+    has_annotation: bool = False
+
+    @field_validator("image_rgb", mode="before")
+    @classmethod
+    def parse_industrial_rgb_image(cls, value: object) -> np.ndarray:
+        image = np.asarray(value, dtype=np.uint8)
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError("Industrial sample image must be RGB with shape [H, W, 3]")
+        return image
+
+
 class AuthSessionRecord(BaseModel):
     """Authenticated API user context."""
 

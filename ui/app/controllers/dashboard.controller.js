@@ -15,6 +15,8 @@
       vm.readiness = null;
       vm.ndtSamples = [];
       vm.busiRows = [];
+      vm.industrialSummary = null;
+      vm.industrialRows = [];
       vm.isAdmin = ApiService.hasRole("admin");
       vm.canTrain = ApiService.hasRole("analyst");
       vm.opsSummary = null;
@@ -212,6 +214,7 @@
           ApiService.getDashboardSummary(),
           ApiService.getDashboardReadiness(),
           ApiService.listNdtSamples(),
+          ApiService.getIndustrialSummary(),
           ApiService.getBusiTrainingLatest(vm.trainingForm.include_normal),
         ];
         if (vm.isAdmin) {
@@ -224,10 +227,12 @@
             vm.summary = responses[0];
             vm.readiness = responses[1];
             vm.ndtSamples = responses[2].slice(0, 5);
-            applyTrainingPayload(responses[3]);
+            vm.industrialSummary = responses[3];
+            vm.industrialRows = (vm.industrialSummary.rows || []).slice(0, 12);
+            applyTrainingPayload(responses[4]);
             if (vm.isAdmin) {
-              vm.opsSummary = responses[4];
-              vm.opsRecent = responses[5];
+              vm.opsSummary = responses[5];
+              vm.opsRecent = responses[6];
             }
 
             vm.busiRows = Object.keys(vm.summary.busi_counts || {})

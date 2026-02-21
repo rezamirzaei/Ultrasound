@@ -100,6 +100,33 @@ class BusiTrainingRunORM(Base):
     __table_args__ = (Index("ix_busi_training_runs_scope", "include_normal", "id"),)
 
 
+class IndustrialSampleORM(Base):
+    __tablename__ = "industrial_samples"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_name = Column(String(64), nullable=False)
+    split = Column(String(32), nullable=False)
+    class_name = Column(String(64), nullable=False)
+    image_filename = Column(String(256), nullable=False)
+    relative_path = Column(String(1024), nullable=False)
+    image_blob = Column(LargeBinary, nullable=False)
+    annotation_blob = Column(LargeBinary, nullable=True)
+    width = Column(Integer, nullable=False)
+    height = Column(Integer, nullable=False)
+    source_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        Index("ix_industrial_samples_dataset_split", "dataset_name", "split", "class_name"),
+        Index(
+            "ux_industrial_samples_dataset_path",
+            "dataset_name",
+            "relative_path",
+            unique=True,
+        ),
+    )
+
+
 class ApiErrorEventORM(Base):
     __tablename__ = "api_error_events"
 

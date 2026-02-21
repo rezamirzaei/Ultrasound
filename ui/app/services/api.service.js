@@ -222,6 +222,27 @@
         return unwrap($http.get(baseUrl + "/datasets/busi/counts", withAuth()));
       };
 
+      this.getIndustrialSummary = function () {
+        return unwrap($http.get(baseUrl + "/datasets/industrial/summary", withAuth()));
+      };
+
+      this.getIndustrialSamplePreview = function (datasetName, split, className, sampleIndex) {
+        return unwrap(
+          $http.get(
+            baseUrl +
+              "/datasets/industrial/samples/" +
+              encodeURIComponent(datasetName) +
+              "/" +
+              encodeURIComponent(split) +
+              "/" +
+              encodeURIComponent(className) +
+              "/" +
+              encodeURIComponent(String(sampleIndex)),
+            withAuth()
+          )
+        );
+      };
+
       this.getBusiSamplePreview = function (className, sampleIndex) {
         return unwrap(
           $http.get(
