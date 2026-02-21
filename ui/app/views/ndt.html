@@ -47,6 +47,9 @@
           <th>#</th>
           <th>Depth (mm)</th>
           <th>Amplitude</th>
+          <th>Time (µs)</th>
+          <th>Source</th>
+          <th>Confidence</th>
         </tr>
       </thead>
       <tbody>
@@ -54,6 +57,9 @@
           <td>{{$index + 1}}</td>
           <td>{{ defect.depth_m == null ? 'N/A' : (defect.depth_m * 1000 | number:3) }}</td>
           <td>{{ defect.amplitude == null ? 'N/A' : (defect.amplitude | number:3) }}</td>
+          <td>{{ defect.time_us == null ? 'N/A' : (defect.time_us | number:4) }}</td>
+          <td>{{ defect.source || 'unknown' }}</td>
+          <td>{{ defect.confidence == null ? 'N/A' : (defect.confidence | number:2) }}</td>
         </tr>
       </tbody>
     </table>
@@ -128,6 +134,8 @@
             <th>Depth (mm)</th>
             <th>Amplitude</th>
             <th>Two-way Time (µs)</th>
+            <th>Source</th>
+            <th>Confidence</th>
           </tr>
         </thead>
         <tbody>
@@ -136,6 +144,8 @@
             <td>{{ marker.depth_mm | number:3 }}</td>
             <td>{{ marker.amplitude == null ? 'N/A' : (marker.amplitude | number:3) }}</td>
             <td>{{ marker.two_way_time_us | number:4 }}</td>
+            <td>{{ marker.source || 'unknown' }}</td>
+            <td>{{ marker.confidence == null ? 'N/A' : (marker.confidence | number:2) }}</td>
           </tr>
         </tbody>
       </table>

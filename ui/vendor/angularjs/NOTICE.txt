@@ -1,0 +1,12 @@
+AngularJS vendor assets
+=======================
+
+This directory contains third-party runtime dependencies used by the UI:
+- angular.min.js (v1.8.3)
+- angular-route.min.js (v1.8.3)
+
+Source:
+https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/
+
+License:
+MIT License (AngularJS project)

@@ -136,6 +136,10 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
         assert defect["depth_m"] is None or isinstance(defect["depth_m"], float)
         # amplitude should be a valid float or None (nan should become None)
         assert defect["amplitude"] is None or isinstance(defect["amplitude"], float)
+        assert defect["source"] in {"metadata", "signal", "fused"}
+        assert 0.0 <= defect["confidence"] <= 1.0
+        if defect["time_us"] is not None:
+            assert defect["time_us"] >= 0.0
 
     signal_response = client.get(
         f"/api/v1/datasets/ndt/samples/{samples[0]['name']}/signal",
@@ -154,6 +158,8 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
         assert marker["depth_mm"] >= 0
         assert marker["two_way_time_us"] >= 0
         assert marker["amplitude"] is None or isinstance(marker["amplitude"], float)
+        assert marker["source"] in {"metadata", "signal", "fused"}
+        assert 0.0 <= marker["confidence"] <= 1.0
 
 
 def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
@@ -208,6 +214,83 @@ def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
     assert len(signal["defect_markers"]) == 2
     assert signal["defect_markers"][0]["depth_mm"] == pytest.approx(8.0)
     assert signal["defect_markers"][1]["depth_mm"] == pytest.approx(11.0)
+
+
+def test_ndt_signal_detection_when_metadata_is_empty(tmp_path: Path) -> None:
+    """Defects should still be detected from waveform when metadata has no defect labels."""
+    data_dir = tmp_path / "data"
+    busi_dir = data_dir / "busi"
+    ndt_dir = data_dir / "ascan_signals" / "ndt_samples"
+    ui_dir = tmp_path / "ui"
+
+    create_sample_data(str(busi_dir), num_samples=1)
+    ndt_dir.mkdir(parents=True, exist_ok=True)
+    ui_dir.mkdir(parents=True, exist_ok=True)
+    (ui_dir / "index.html").write_text("<html></html>")
+
+    fs = 50e6
+    fc = 5e6
+    c = 5900.0
+    thickness_m = 0.012
+    n = 1200
+    time = np.arange(n, dtype=np.float64) / fs
+
+    pulse_duration_s = 0.5e-6
+    pulse_t = np.arange(0.0, pulse_duration_s, 1.0 / fs)
+    pulse = np.exp(
+        -((pulse_t - pulse_duration_s / 2.0) ** 2) / (2.0 * (pulse_duration_s / 6.0) ** 2)
+    )
+    pulse *= np.sin(2.0 * np.pi * fc * pulse_t)
+
+    rf = np.zeros(n, dtype=np.float64)
+    fw_idx = int(0.5e-6 * fs)
+    defect_depth_m = 0.006
+    defect_idx = int((2.0 * defect_depth_m / c) * fs)
+    bw_idx = int((2.0 * thickness_m / c) * fs)
+
+    rf[fw_idx : fw_idx + pulse.size] += pulse
+    rf[defect_idx : defect_idx + pulse.size] += 0.38 * pulse
+    rf[bw_idx : bw_idx + pulse.size] += 0.8 * pulse
+
+    rng = np.random.default_rng(123)
+    rf += 0.01 * rng.standard_normal(n)
+
+    np.savez(
+        ndt_dir / "signal_only_defect.npz",
+        rf=rf,
+        time=time,
+        fs=fs,
+        fc=fc,
+        c=c,
+        thickness=thickness_m,
+        description="Signal-only defect test sample",
+        defects=np.array([], dtype=np.float64),
+    )
+
+    config = AppConfig(
+        project_root=tmp_path,
+        data_dir=data_dir,
+        busi_dir=busi_dir,
+        ndt_dir=ndt_dir,
+        ui_dir=ui_dir,
+        artifacts_dir=tmp_path / "artifacts",
+    )
+    app = create_app(config=config)
+    test_client = TestClient(app)
+
+    detail = test_client.get("/api/v1/datasets/ndt/samples/signal_only_defect.npz").json()
+    assert detail["n_defects"] >= 1
+    signal_like = [item for item in detail["defects"] if item["source"] in {"signal", "fused"}]
+    assert signal_like
+    assert any(0.004 <= float(item["depth_m"]) <= 0.008 for item in signal_like)
+    assert all(0.0 <= float(item["confidence"]) <= 1.0 for item in signal_like)
+
+    signal = test_client.get(
+        "/api/v1/datasets/ndt/samples/signal_only_defect.npz/signal",
+        params={"max_points": 512},
+    ).json()
+    assert signal["defect_markers"]
+    assert any(marker["source"] == "signal" for marker in signal["defect_markers"])
 
 
 def test_busi_sample_preview_endpoint(client: TestClient) -> None:

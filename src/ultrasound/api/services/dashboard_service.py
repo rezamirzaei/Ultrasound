@@ -19,14 +19,21 @@ from ultrasound.api.models.schemas import (
 )
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
 from ultrasound.api.services.media_service import MediaService
+from ultrasound.api.services.ndt_detection_service import NdtDetectionService
 
 
 class DashboardService:
     """Business logic for dashboard-level responses."""
 
-    def __init__(self, dataset_repository: DatasetRepository, media_service: MediaService):
+    def __init__(
+        self,
+        dataset_repository: DatasetRepository,
+        media_service: MediaService,
+        ndt_detection_service: NdtDetectionService,
+    ):
         self.dataset_repository = dataset_repository
         self.media_service = media_service
+        self.ndt_detection_service = ndt_detection_service
 
     def get_summary(self) -> DashboardSummaryResponse:
         busi_counts = self.dataset_repository.get_busi_counts()
@@ -89,21 +96,27 @@ class DashboardService:
         )
 
     def list_ndt_samples(self) -> list[NdtSampleSummary]:
-        rows = self.dataset_repository.summarize_ndt_samples()
-        return [
-            NdtSampleSummary(
-                name=row["name"],
-                n_points=row["n_points"],
-                fs_hz=row["fs_hz"],
-                fc_hz=row["fc_hz"],
-                thickness_mm=row["thickness_mm"],
-                n_defects=row["n_defects"],
+        summaries: list[NdtSampleSummary] = []
+        for sample_name in self.dataset_repository.list_ndt_samples():
+            sample = self.dataset_repository.load_ndt_sample(sample_name)
+            resolved_defects = self.ndt_detection_service.resolve_defects(sample)
+            summaries.append(
+                NdtSampleSummary(
+                    name=sample.name,
+                    n_points=int(sample.rf.size),
+                    fs_hz=float(sample.fs_hz),
+                    fc_hz=float(sample.fc_hz),
+                    thickness_mm=(
+                        float(sample.thickness_m * 1e3) if sample.thickness_m is not None else None
+                    ),
+                    n_defects=len(resolved_defects),
+                )
             )
-            for row in rows
-        ]
+        return summaries
 
     def get_ndt_signal_preview(self, sample_name: str, max_points: int = 1024) -> NdtSignalPreview:
         sample = self.dataset_repository.load_ndt_sample(sample_name)
+        resolved_defects = self.ndt_detection_service.resolve_defects(sample)
         rf = np.asarray(sample.rf, dtype=np.float64).reshape(-1)
         time = np.asarray(sample.time, dtype=np.float64).reshape(-1)
 
@@ -122,18 +135,23 @@ class DashboardService:
 
         c = float(sample.c_mps)
         defect_markers: list[NdtDefectMarker] = []
-        for defect in sample.defects:
+        for defect in resolved_defects:
             depth_m = defect.depth_m
-            amplitude = defect.amplitude
-            if depth_m is None or c <= 0:
+            if c <= 0.0:
                 continue
 
-            two_way_time_us = (2.0 * depth_m / c) * 1e6
+            if defect.time_us is not None:
+                two_way_time_us = float(defect.time_us)
+            else:
+                two_way_time_us = (2.0 * float(depth_m) / c) * 1e6
+
             defect_markers.append(
                 NdtDefectMarker(
-                    depth_mm=depth_m * 1e3,
-                    amplitude=amplitude,
+                    depth_mm=float(depth_m * 1e3),
+                    amplitude=defect.amplitude,
                     two_way_time_us=two_way_time_us,
+                    confidence=defect.confidence,
+                    source=defect.source,
                 )
             )
 
@@ -157,19 +175,25 @@ class DashboardService:
 
     def get_ndt_sample_detail(self, sample_name: str) -> NdtSampleDetail:
         sample = self.dataset_repository.load_ndt_sample(sample_name)
+        resolved_defects = self.ndt_detection_service.resolve_defects(sample)
         return NdtSampleDetail(
             name=sample.name,
             n_points=int(sample.rf.size),
             fs_hz=float(sample.fs_hz),
             fc_hz=float(sample.fc_hz),
-            thickness_mm=float(sample.thickness_m * 1e3) if sample.thickness_m else None,
-            n_defects=len(sample.defects),
+            thickness_mm=(
+                float(sample.thickness_m * 1e3) if sample.thickness_m is not None else None
+            ),
+            n_defects=len(resolved_defects),
             description=sample.description,
             defects=[
                 NdtDefect(
                     depth_m=defect.depth_m,
                     amplitude=defect.amplitude,
+                    time_us=defect.time_us,
+                    confidence=defect.confidence,
+                    source=defect.source,
                 )
-                for defect in sample.defects
+                for defect in resolved_defects
             ],
         )

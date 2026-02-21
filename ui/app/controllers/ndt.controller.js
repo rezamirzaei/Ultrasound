@@ -83,10 +83,18 @@
 
         var markers = (signal.defect_markers || []).map(function (marker) {
           var ampStr = marker.amplitude != null ? " | A=" + marker.amplitude.toFixed(3) : "";
+          var confidenceStr = marker.confidence != null ? " | conf=" + marker.confidence.toFixed(2) : "";
+          var sourceStr = marker.source ? " | " + marker.source : "";
           return {
             x: toX(marker.two_way_time_us),
             label:
-              marker.depth_mm.toFixed(2) + " mm | t=" + marker.two_way_time_us.toFixed(3) + " µs" + ampStr,
+              marker.depth_mm.toFixed(2) +
+              " mm | t=" +
+              marker.two_way_time_us.toFixed(3) +
+              " µs" +
+              ampStr +
+              confidenceStr +
+              sourceStr,
           };
         });
 

@@ -42,6 +42,9 @@ class NdtSampleSummary(BaseModel):
 class NdtDefect(BaseModel):
     depth_m: float | None = None
     amplitude: float | None = None
+    time_us: float | None = Field(default=None, ge=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    source: str | None = Field(default=None, pattern="^(metadata|signal|fused)$")
 
 
 class NdtSampleDetail(NdtSampleSummary):
@@ -61,6 +64,8 @@ class NdtDefectMarker(BaseModel):
     depth_mm: float = Field(ge=0)
     amplitude: float | None = None
     two_way_time_us: float = Field(ge=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    source: str | None = Field(default=None, pattern="^(metadata|signal|fused)$")
 
 
 class NdtSignalPreview(BaseModel):

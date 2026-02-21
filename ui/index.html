@@ -21,10 +21,10 @@
           <p>Ultrasound Control Room</p>
         </div>
         <nav>
-          <a ng-class="{active: main.isActive('/dashboard')}" href="" ng-click="main.navigateTo('/dashboard')">Dashboard</a>
-          <a ng-class="{active: main.isActive('/busi')}" href="" ng-click="main.navigateTo('/busi')">BUSI Explorer</a>
-          <a ng-class="{active: main.isActive('/preprocessing')}" href="" ng-click="main.navigateTo('/preprocessing')">Preprocessing Lab</a>
-          <a ng-class="{active: main.isActive('/ndt')}" href="" ng-click="main.navigateTo('/ndt')">NDT Explorer</a>
+          <a ng-class="{active: main.isActive('/dashboard')}" ng-href="#/dashboard">Dashboard</a>
+          <a ng-class="{active: main.isActive('/busi')}" ng-href="#/busi">BUSI Explorer</a>
+          <a ng-class="{active: main.isActive('/preprocessing')}" ng-href="#/preprocessing">Preprocessing Lab</a>
+          <a ng-class="{active: main.isActive('/ndt')}" ng-href="#/ndt">NDT Explorer</a>
         </nav>
         <div class="sidebar-footer">
           <span>REST API</span>
@@ -41,8 +41,8 @@
       </main>
     </div>
 
-    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular-route.min.js"></script>
+    <script src="vendor/angularjs/angular.min.js"></script>
+    <script src="vendor/angularjs/angular-route.min.js"></script>
 
     <script src="app/app.module.js"></script>
     <script src="app/app.routes.js"></script>

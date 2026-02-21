@@ -130,7 +130,7 @@ UI modules:
 - Dashboard: project summary + quick navigation
 - BUSI Explorer: browse images/masks by class and sample index
 - Preprocessing Lab: run Lee/Frost/CLAHE/ADMM-TV and compare metrics
-- NDT Explorer: inspect sample metadata, defect tables, and sampled RF waveforms
+- NDT Explorer: inspect sample metadata, fused defect detections, and sampled RF waveforms
 
 Key API endpoints used by the UI:
 - `GET /api/v1/dashboard/summary`
@@ -143,6 +143,8 @@ Validation & reliability:
 - Repository outputs are normalized into typed Pydantic domain objects before entering services.
 - API responses are strict Pydantic models (no NaN payload leaks to clients).
 - NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.
+- NDT defects are fused from metadata + waveform analysis (Hilbert envelope + adaptive peak detection).
+- UI dependencies are vendored locally under `ui/vendor/` so sidebar routing works without external CDNs.
 
 Run tests in Docker explicitly:
 

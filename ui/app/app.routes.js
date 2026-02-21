@@ -3,7 +3,10 @@
 
   angular.module("inPhaseApp").config([
     "$routeProvider",
-    function ($routeProvider) {
+    "$locationProvider",
+    function ($routeProvider, $locationProvider) {
+      $locationProvider.hashPrefix("");
+
       $routeProvider
         .when("/dashboard", {
           templateUrl: "app/views/dashboard.html",

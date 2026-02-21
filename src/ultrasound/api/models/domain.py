@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -30,6 +31,26 @@ class NdtDefectRecord(BaseModel):
     @field_validator("depth_m", "amplitude", mode="before")
     @classmethod
     def parse_optional_floats(cls, value: object) -> float | None:
+        return _to_finite_float_or_none(value)
+
+
+class NdtAnalyzedDefect(BaseModel):
+    """Defect candidate produced by metadata and/or waveform analysis."""
+
+    depth_m: float = Field(ge=0.0)
+    amplitude: float | None = None
+    time_us: float | None = Field(default=None, ge=0.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    source: Literal["metadata", "signal", "fused"]
+
+    @field_validator("amplitude", mode="before")
+    @classmethod
+    def parse_optional_amplitude(cls, value: object) -> float | None:
+        return _to_finite_float_or_none(value)
+
+    @field_validator("time_us", mode="before")
+    @classmethod
+    def parse_optional_time(cls, value: object) -> float | None:
         return _to_finite_float_or_none(value)
 
 
