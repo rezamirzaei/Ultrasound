@@ -53,6 +53,7 @@ inPhase/
 │   │   ├── controllers/      # HTTP controllers/routers
 │   │   ├── services/         # Business logic services
 │   │   ├── repositories/     # Data access abstractions
+│   │   ├── database/         # SQLAlchemy ORM models/session
 │   │   └── models/           # API schemas
 │   └── utils/                # Utility functions
 │       ├── io.py             # Image I/O, DICOM support
@@ -131,6 +132,10 @@ Default sign-in accounts (change with `INPHASE_*_PASSWORD` env vars):
 - `analyst / analyst123` (includes preprocessing workflows)
 - `admin / admin123` (includes operational error analytics)
 
+Database:
+- Default DB URL: `sqlite:///data/inphase.sqlite3`
+- Override with `INPHASE_DATABASE_URL` (for Postgres/MySQL in production)
+
 UI modules:
 - Dashboard: project summary + quick navigation
 - BUSI Explorer: browse images/masks by class and sample index
@@ -146,10 +151,13 @@ Key API endpoints used by the UI:
 - `POST /api/v1/datasets/busi/training/run`
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
 - `POST /api/v1/preprocessing/preview`
+- `POST /api/v1/ops/datasets/resync` (admin)
+- `POST /api/v1/ops/datasets/resync` (admin)
 
 Validation & reliability:
-- BUSI image/mask data is synchronized into SQLite (`data/inphase.sqlite3`) and served from SQL.
+- BUSI and NDT datasets are persisted in SQLite (`data/inphase.sqlite3`) and served through SQLAlchemy ORM repositories.
 - BUSI learning service trains from SQL-stored samples and persists run metrics + epoch curves.
+- API error analytics are persisted in DB for durable operational dashboards.
 - Repository outputs are normalized into typed Pydantic domain objects before entering services.
 - API responses are strict Pydantic models (no NaN payload leaks to clients).
 - NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.

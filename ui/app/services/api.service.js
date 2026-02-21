@@ -197,6 +197,10 @@
         );
       };
 
+      this.resyncDatasets = function () {
+        return unwrap($http.post(baseUrl + "/ops/datasets/resync", {}, withAuth()));
+      };
+
       this.getBusiCounts = function () {
         return unwrap($http.get(baseUrl + "/datasets/busi/counts", withAuth()));
       };

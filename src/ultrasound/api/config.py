@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +17,7 @@ class AppConfig:
     ndt_dir: Path
     ui_dir: Path
     artifacts_dir: Path
+    database_url: str = ""
 
     @classmethod
     def from_project_root(cls, start: Path | None = None) -> "AppConfig":
@@ -31,6 +33,8 @@ class AppConfig:
             )
 
         data_dir = project_root / "data"
+        default_db_url = f"sqlite:///{(data_dir / 'inphase.sqlite3').resolve()}"
+        database_url = os.getenv("INPHASE_DATABASE_URL", default_db_url)
         return cls(
             project_root=project_root,
             data_dir=data_dir,
@@ -38,4 +42,5 @@ class AppConfig:
             ndt_dir=data_dir / "ascan_signals" / "ndt_samples",
             ui_dir=project_root / "ui",
             artifacts_dir=project_root / "outputs" / "api",
+            database_url=database_url,
         )

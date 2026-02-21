@@ -608,5 +608,14 @@ def test_ops_error_analytics_admin_only(client: TestClient) -> None:
     assert recent.status_code == 200
     recent_payload = recent.json()
     assert isinstance(recent_payload, list)
+
+    resync_forbidden = client.post("/api/v1/ops/datasets/resync", headers=viewer_headers)
+    assert resync_forbidden.status_code == 403
+
+    resync = client.post("/api/v1/ops/datasets/resync", headers=admin_headers)
+    assert resync.status_code == 200
+    resync_payload = resync.json()
+    assert resync_payload["busi_rows_synced"] >= 0
+    assert resync_payload["ndt_rows_synced"] >= 0
     assert len(recent_payload) >= 1
     assert "request_id" in recent_payload[0]

@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, Query
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
-from ultrasound.api.models.schemas import OpsErrorEvent, OpsErrorSummaryResponse
+from ultrasound.api.models.schemas import (
+    DatasetResyncResponse,
+    OpsErrorEvent,
+    OpsErrorSummaryResponse,
+)
 
 router = APIRouter(
     tags=["ops"],
@@ -32,3 +36,11 @@ def get_recent_errors(
     """Return most recent API errors for troubleshooting and triage."""
     events = container.error_analytics_service.recent_errors(limit=limit)
     return [OpsErrorEvent(**event.model_dump()) for event in events]
+
+
+@router.post("/ops/datasets/resync", response_model=DatasetResyncResponse)
+def resync_datasets(
+    container: ApplicationContainer = Depends(get_container),
+) -> DatasetResyncResponse:
+    """Resync BUSI and NDT source files into DB tables."""
+    return container.data_ingestion_service.resync_all()

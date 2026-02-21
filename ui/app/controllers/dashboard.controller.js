@@ -24,6 +24,9 @@
       vm.trainingChart = null;
       vm.trainingLoading = false;
       vm.trainingError = null;
+      vm.resyncLoading = false;
+      vm.resyncError = null;
+      vm.resyncResult = null;
       vm.trainingForm = {
         include_normal: false,
         epochs: 12,
@@ -177,6 +180,27 @@
           })
           .finally(function () {
             vm.trainingLoading = false;
+          });
+      };
+
+      vm.resyncDatasets = function () {
+        if (!vm.isAdmin) {
+          return;
+        }
+        vm.resyncLoading = true;
+        vm.resyncError = null;
+        vm.resyncResult = null;
+
+        ApiService.resyncDatasets()
+          .then(function (payload) {
+            vm.resyncResult = payload;
+            load();
+          })
+          .catch(function (error) {
+            vm.resyncError = error.detail || "Failed to resync datasets into database";
+          })
+          .finally(function () {
+            vm.resyncLoading = false;
           });
       };
 

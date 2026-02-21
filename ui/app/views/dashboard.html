@@ -189,6 +189,17 @@
 
   <div class="panel" ng-if="vm.isAdmin">
     <h3>Server Error Analytics</h3>
+    <div class="toolbar">
+      <button class="btn btn-muted" type="button" ng-click="vm.resyncDatasets()" ng-disabled="vm.resyncLoading">
+        {{ vm.resyncLoading ? 'Syncing...' : 'Resync DB From Files' }}
+      </button>
+    </div>
+    <p class="note signal-error" ng-if="vm.resyncError">{{ vm.resyncError }}</p>
+    <ul class="list compact" ng-if="vm.resyncResult">
+      <li><span>BUSI Rows Synced</span><strong>{{ vm.resyncResult.busi_rows_synced }}</strong></li>
+      <li><span>NDT Rows Synced</span><strong>{{ vm.resyncResult.ndt_rows_synced }}</strong></li>
+      <li><span>Synced At</span><strong>{{ vm.resyncResult.generated_at | date:'medium' }}</strong></li>
+    </ul>
     <p class="note" ng-if="!vm.opsSummary">No server error summary available.</p>
     <div class="metric-grid" ng-if="vm.opsSummary">
       <metric-tile label="Window (min)" value="vm.opsSummary.window_minutes" tone="muted"></metric-tile>

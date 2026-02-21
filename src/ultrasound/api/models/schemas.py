@@ -221,3 +221,9 @@ class OpsErrorSummaryResponse(BaseModel):
     by_status: Dict[str, int]
     by_path: Dict[str, int]
     last_error_at: datetime | None = None
+
+
+class DatasetResyncResponse(BaseModel):
+    generated_at: datetime
+    busi_rows_synced: int = Field(ge=0)
+    ndt_rows_synced: int = Field(ge=0)
