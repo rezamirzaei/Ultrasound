@@ -13,6 +13,7 @@ from .schemas import (
     NdtSampleSummary,
     NdtSignalPreview,
     NdtSignalStats,
+    NdtWallMarker,
     PreprocessingPreviewResponse,
     PreprocessingRequest,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "NdtSampleSummary",
     "NdtSignalPreview",
     "NdtSignalStats",
+    "NdtWallMarker",
     "PreprocessingPreviewResponse",
     "PreprocessingRequest",
 ]

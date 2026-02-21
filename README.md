@@ -144,6 +144,7 @@ Validation & reliability:
 - API responses are strict Pydantic models (no NaN payload leaks to clients).
 - NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.
 - NDT defects are fused from metadata + waveform analysis (Hilbert envelope + adaptive peak detection).
+- NDT signal endpoint now exposes wall markers, total peaks, thickness estimate/error, and thinning flag.
 - UI dependencies are vendored locally under `ui/vendor/` so sidebar routing works without external CDNs.
 
 Run tests in Docker explicitly:

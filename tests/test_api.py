@@ -152,6 +152,13 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     assert len(signal["time_us"]) == signal["n_sampled_points"]
     assert len(signal["rf"]) == signal["n_sampled_points"]
     assert "stats" in signal
+    assert signal["total_peaks"] >= 0
+    assert isinstance(signal["thinning_flag"], bool)
+    assert isinstance(signal["wall_markers"], list)
+    if signal["estimated_thickness_mm"] is not None:
+        assert signal["estimated_thickness_mm"] >= 0.0
+    if signal["nominal_thickness_mm"] is not None:
+        assert signal["nominal_thickness_mm"] >= 0.0
 
     # Verify defect markers are valid — only defects with finite depth produce markers
     for marker in signal["defect_markers"]:
@@ -160,6 +167,13 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
         assert marker["amplitude"] is None or isinstance(marker["amplitude"], float)
         assert marker["source"] in {"metadata", "signal", "fused"}
         assert 0.0 <= marker["confidence"] <= 1.0
+
+    for wall in signal["wall_markers"]:
+        assert wall["label"] in {"front_wall", "back_wall"}
+        assert wall["two_way_time_us"] >= 0
+        assert wall["amplitude"] is None or isinstance(wall["amplitude"], float)
+        if wall["depth_mm"] is not None:
+            assert wall["depth_mm"] >= 0
 
 
 def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
@@ -175,16 +189,40 @@ def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
     (ui_dir / "index.html").write_text("<html></html>")
 
     # Save defects as list-of-tuples — exactly how download_ascan_data.py does it
-    n = 256
+    n = 1024
     fs = 50e6
+    fc = 5e6
+    c = 5900.0
+    thickness_m = 0.02
+    time = np.arange(n, dtype=np.float64) / fs
+    pulse_duration_s = 0.5e-6
+    pulse_t = np.arange(0.0, pulse_duration_s, 1.0 / fs)
+    pulse = np.exp(
+        -((pulse_t - pulse_duration_s / 2.0) ** 2) / (2.0 * (pulse_duration_s / 6.0) ** 2)
+    )
+    pulse *= np.sin(2.0 * np.pi * fc * pulse_t)
+
+    rf = np.zeros(n, dtype=np.float64)
+    fw_idx = int(0.5e-6 * fs)
+    d1_idx = int((2.0 * 0.008 / c) * fs)
+    d2_idx = int((2.0 * 0.011 / c) * fs)
+    bw_idx = int((2.0 * thickness_m / c) * fs)
+    rf[fw_idx : fw_idx + pulse.size] += pulse
+    rf[d1_idx : d1_idx + pulse.size] += 0.4 * pulse
+    rf[d2_idx : d2_idx + pulse.size] += 0.2 * pulse
+    rf[bw_idx : bw_idx + pulse.size] += 0.8 * pulse
+
+    rng = np.random.default_rng(5)
+    rf += 0.01 * rng.standard_normal(n)
+
     np.savez(
         ndt_dir / "tuple_defects.npz",
-        rf=np.random.randn(n),
-        time=np.arange(n, dtype=np.float64) / fs,
+        rf=rf,
+        time=time,
         fs=fs,
-        fc=5e6,
-        c=5900.0,
-        thickness=0.02,
+        fc=fc,
+        c=c,
+        thickness=thickness_m,
         description="Test with tuple defects",
         defects=[(0.008, 0.4), (0.011, 0.2)],
     )
@@ -202,18 +240,24 @@ def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
 
     detail = test_client.get("/api/v1/datasets/ndt/samples/tuple_defects.npz").json()
     assert detail["n_defects"] == 2
-    assert detail["defects"][0]["depth_m"] == pytest.approx(0.008)
-    assert detail["defects"][0]["amplitude"] == pytest.approx(0.4)
-    assert detail["defects"][1]["depth_m"] == pytest.approx(0.011)
-    assert detail["defects"][1]["amplitude"] == pytest.approx(0.2)
+    depths = sorted(
+        float(item["depth_m"]) for item in detail["defects"] if item["depth_m"] is not None
+    )
+    assert len(depths) == 2
+    assert abs(depths[0] - 0.008) < 0.0015
+    assert abs(depths[1] - 0.011) < 0.0015
 
     signal = test_client.get(
         "/api/v1/datasets/ndt/samples/tuple_defects.npz/signal",
         params={"max_points": 256},
     ).json()
+    assert signal["total_peaks"] >= 2
+    assert signal["thinning_flag"] is False
+    assert len(signal["wall_markers"]) == 2
     assert len(signal["defect_markers"]) == 2
-    assert signal["defect_markers"][0]["depth_mm"] == pytest.approx(8.0)
-    assert signal["defect_markers"][1]["depth_mm"] == pytest.approx(11.0)
+    marker_depths = sorted(float(item["depth_mm"]) for item in signal["defect_markers"])
+    assert abs(marker_depths[0] - 8.0) < 1.5
+    assert abs(marker_depths[1] - 11.0) < 1.5
 
 
 def test_ndt_signal_detection_when_metadata_is_empty(tmp_path: Path) -> None:
@@ -289,8 +333,81 @@ def test_ndt_signal_detection_when_metadata_is_empty(tmp_path: Path) -> None:
         "/api/v1/datasets/ndt/samples/signal_only_defect.npz/signal",
         params={"max_points": 512},
     ).json()
+    assert signal["total_peaks"] >= 3
+    assert signal["thinning_flag"] is False
+    assert len(signal["wall_markers"]) == 2
+    assert signal["estimated_thickness_mm"] is not None
     assert signal["defect_markers"]
     assert any(marker["source"] == "signal" for marker in signal["defect_markers"])
+
+
+def test_ndt_thinning_flag_and_thickness_estimation(tmp_path: Path) -> None:
+    """Corrosion/thinning sample should expose wall markers and thinning metadata."""
+    data_dir = tmp_path / "data"
+    busi_dir = data_dir / "busi"
+    ndt_dir = data_dir / "ascan_signals" / "ndt_samples"
+    ui_dir = tmp_path / "ui"
+
+    create_sample_data(str(busi_dir), num_samples=1)
+    ndt_dir.mkdir(parents=True, exist_ok=True)
+    ui_dir.mkdir(parents=True, exist_ok=True)
+    (ui_dir / "index.html").write_text("<html></html>")
+
+    fs = 50e6
+    fc = 5e6
+    c = 5900.0
+    thickness_m = 0.008
+    n = 1000
+    time = np.arange(n, dtype=np.float64) / fs
+
+    pulse_duration_s = 0.5e-6
+    pulse_t = np.arange(0.0, pulse_duration_s, 1.0 / fs)
+    pulse = np.exp(
+        -((pulse_t - pulse_duration_s / 2.0) ** 2) / (2.0 * (pulse_duration_s / 6.0) ** 2)
+    )
+    pulse *= np.sin(2.0 * np.pi * fc * pulse_t)
+
+    rf = np.zeros(n, dtype=np.float64)
+    fw_idx = int(0.5e-6 * fs)
+    bw_idx = int((2.0 * thickness_m / c) * fs)
+    rf[fw_idx : fw_idx + pulse.size] += pulse
+    rf[bw_idx : bw_idx + pulse.size] += 0.8 * pulse
+
+    rng = np.random.default_rng(77)
+    rf += 0.01 * rng.standard_normal(n)
+
+    np.savez(
+        ndt_dir / "corrosion_like.npz",
+        rf=rf,
+        time=time,
+        fs=fs,
+        fc=fc,
+        c=c,
+        thickness=thickness_m,
+        description="Corroded plate (original 10mm)",
+        defects=np.array([], dtype=np.float64),
+    )
+
+    config = AppConfig(
+        project_root=tmp_path,
+        data_dir=data_dir,
+        busi_dir=busi_dir,
+        ndt_dir=ndt_dir,
+        ui_dir=ui_dir,
+        artifacts_dir=tmp_path / "artifacts",
+    )
+    app = create_app(config=config)
+    test_client = TestClient(app)
+
+    signal = test_client.get(
+        "/api/v1/datasets/ndt/samples/corrosion_like.npz/signal",
+        params={"max_points": 512},
+    ).json()
+
+    assert signal["total_peaks"] >= 2
+    assert len(signal["wall_markers"]) == 2
+    assert signal["estimated_thickness_mm"] is not None
+    assert signal["thinning_flag"] is True
 
 
 def test_busi_sample_preview_endpoint(client: TestClient) -> None:

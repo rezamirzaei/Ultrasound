@@ -98,12 +98,29 @@
           };
         });
 
+        var wallMarkers = (signal.wall_markers || []).map(function (marker) {
+          var depthStr = marker.depth_mm != null ? marker.depth_mm.toFixed(2) + " mm | " : "";
+          var ampStr = marker.amplitude != null ? " | A=" + marker.amplitude.toFixed(3) : "";
+          return {
+            x: toX(marker.two_way_time_us),
+            label:
+              marker.label.replace("_", " ") +
+              " | " +
+              depthStr +
+              "t=" +
+              marker.two_way_time_us.toFixed(3) +
+              " \u00b5s" +
+              ampStr,
+          };
+        });
+
         return {
           width: width,
           height: height,
           path: path,
           baselineY: toY(0.0),
           markers: markers,
+          wallMarkers: wallMarkers,
         };
       }
 

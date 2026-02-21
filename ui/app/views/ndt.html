@@ -111,12 +111,27 @@
               class="signal-marker-label"
             >{{ marker.label }}</text>
           </g>
+          <g ng-repeat="wall in vm.chart.wallMarkers">
+            <line
+              ng-attr-x1="{{ wall.x }}"
+              y1="0"
+              ng-attr-x2="{{ wall.x }}"
+              ng-attr-y2="{{ vm.chart.height }}"
+              class="signal-wall-marker"
+            ></line>
+            <text
+              ng-attr-x="{{ wall.x + 4 }}"
+              y="28"
+              class="signal-wall-marker-label"
+            >{{ wall.label }}</text>
+          </g>
         </svg>
       </div>
 
       <ul class="list compact">
         <li><span>Original Points</span><strong>{{ vm.signal.n_original_points }}</strong></li>
         <li><span>Sampled Points</span><strong>{{ vm.signal.n_sampled_points }}</strong></li>
+        <li><span>Total Peaks</span><strong>{{ vm.signal.total_peaks }}</strong></li>
         <li><span>Amplitude Min</span><strong>{{ vm.signal.stats.amplitude_min | number:4 }}</strong></li>
         <li><span>Amplitude Max</span><strong>{{ vm.signal.stats.amplitude_max | number:4 }}</strong></li>
         <li><span>Amplitude RMS</span><strong>{{ vm.signal.stats.amplitude_rms | number:4 }}</strong></li>
@@ -124,8 +139,46 @@
           <span>Time Window (µs)</span>
           <strong>{{ vm.signal.stats.time_start_us | number:3 }} – {{ vm.signal.stats.time_end_us | number:3 }}</strong>
         </li>
+        <li>
+          <span>Estimated Thickness (mm)</span>
+          <strong>{{ vm.signal.estimated_thickness_mm == null ? 'N/A' : (vm.signal.estimated_thickness_mm | number:3) }}</strong>
+        </li>
+        <li>
+          <span>Nominal Thickness (mm)</span>
+          <strong>{{ vm.signal.nominal_thickness_mm == null ? 'N/A' : (vm.signal.nominal_thickness_mm | number:3) }}</strong>
+        </li>
+        <li>
+          <span>Thickness Error (mm)</span>
+          <strong>{{ vm.signal.thickness_error_mm == null ? 'N/A' : (vm.signal.thickness_error_mm | number:3) }}</strong>
+        </li>
+        <li>
+          <span>Thinning Flag</span>
+          <strong>{{ vm.signal.thinning_flag ? 'YES' : 'NO' }}</strong>
+        </li>
         <li><span>Defect Markers</span><strong>{{ vm.signal.defect_markers.length }}</strong></li>
+        <li><span>Wall Markers</span><strong>{{ vm.signal.wall_markers.length }}</strong></li>
       </ul>
+
+      <table class="result-table" ng-if="vm.signal.wall_markers.length">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Label</th>
+            <th>Depth (mm)</th>
+            <th>Amplitude</th>
+            <th>Time (µs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr ng-repeat="wall in vm.signal.wall_markers">
+            <td>{{ $index + 1 }}</td>
+            <td>{{ wall.label }}</td>
+            <td>{{ wall.depth_mm == null ? 'N/A' : (wall.depth_mm | number:3) }}</td>
+            <td>{{ wall.amplitude == null ? 'N/A' : (wall.amplitude | number:3) }}</td>
+            <td>{{ wall.two_way_time_us | number:4 }}</td>
+          </tr>
+        </tbody>
+      </table>
 
       <table class="result-table" ng-if="vm.signal.defect_markers.length">
         <thead>

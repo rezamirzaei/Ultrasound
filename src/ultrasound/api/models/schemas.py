@@ -68,6 +68,13 @@ class NdtDefectMarker(BaseModel):
     source: str | None = Field(default=None, pattern="^(metadata|signal|fused)$")
 
 
+class NdtWallMarker(BaseModel):
+    label: str = Field(pattern="^(front_wall|back_wall)$")
+    depth_mm: float | None = Field(default=None, ge=0)
+    amplitude: float | None = None
+    two_way_time_us: float = Field(ge=0)
+
+
 class NdtSignalPreview(BaseModel):
     sample_name: str
     n_original_points: int = Field(gt=0)
@@ -75,6 +82,12 @@ class NdtSignalPreview(BaseModel):
     time_us: List[float]
     rf: List[float]
     stats: NdtSignalStats
+    total_peaks: int = Field(ge=0)
+    wall_markers: List[NdtWallMarker] = Field(default_factory=list)
+    estimated_thickness_mm: float | None = Field(default=None, ge=0)
+    nominal_thickness_mm: float | None = Field(default=None, ge=0)
+    thickness_error_mm: float | None = None
+    thinning_flag: bool = False
     defect_markers: List[NdtDefectMarker]
 
 

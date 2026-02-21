@@ -16,6 +16,7 @@ from ultrasound.api.models.schemas import (
     NdtSampleSummary,
     NdtSignalPreview,
     NdtSignalStats,
+    NdtWallMarker,
 )
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
 from ultrasound.api.services.media_service import MediaService
@@ -116,7 +117,11 @@ class DashboardService:
 
     def get_ndt_signal_preview(self, sample_name: str, max_points: int = 1024) -> NdtSignalPreview:
         sample = self.dataset_repository.load_ndt_sample(sample_name)
-        resolved_defects = self.ndt_detection_service.resolve_defects(sample)
+        signal_analysis = self.ndt_detection_service.analyze_signal(sample)
+        resolved_defects = self.ndt_detection_service.resolve_defects(
+            sample,
+            signal_analysis=signal_analysis,
+        )
         rf = np.asarray(sample.rf, dtype=np.float64).reshape(-1)
         time = np.asarray(sample.time, dtype=np.float64).reshape(-1)
 
@@ -155,6 +160,30 @@ class DashboardService:
                 )
             )
 
+        wall_markers: list[NdtWallMarker] = []
+        if signal_analysis.front_wall is not None:
+            wall_markers.append(
+                NdtWallMarker(
+                    label="front_wall",
+                    depth_mm=0.0,
+                    amplitude=signal_analysis.front_wall.amplitude,
+                    two_way_time_us=signal_analysis.front_wall.time_us,
+                )
+            )
+        if signal_analysis.back_wall is not None:
+            wall_markers.append(
+                NdtWallMarker(
+                    label="back_wall",
+                    depth_mm=(
+                        signal_analysis.back_wall.depth_m * 1e3
+                        if signal_analysis.back_wall.depth_m is not None
+                        else None
+                    ),
+                    amplitude=signal_analysis.back_wall.amplitude,
+                    two_way_time_us=signal_analysis.back_wall.time_us,
+                )
+            )
+
         stats = NdtSignalStats(
             amplitude_min=float(np.min(rf_sampled)),
             amplitude_max=float(np.max(rf_sampled)),
@@ -170,6 +199,12 @@ class DashboardService:
             time_us=[float(v * 1e6) for v in time_sampled],
             rf=[float(v) for v in rf_sampled],
             stats=stats,
+            total_peaks=signal_analysis.total_peaks,
+            wall_markers=wall_markers,
+            estimated_thickness_mm=signal_analysis.estimated_thickness_mm,
+            nominal_thickness_mm=signal_analysis.nominal_thickness_mm,
+            thickness_error_mm=signal_analysis.thickness_error_mm,
+            thinning_flag=signal_analysis.thinning_flag,
             defect_markers=defect_markers,
         )
 

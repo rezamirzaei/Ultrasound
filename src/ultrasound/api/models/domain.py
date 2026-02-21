@@ -54,6 +54,41 @@ class NdtAnalyzedDefect(BaseModel):
         return _to_finite_float_or_none(value)
 
 
+class NdtWallEchoRecord(BaseModel):
+    """Detected front/back wall echo descriptor."""
+
+    label: Literal["front_wall", "back_wall"]
+    index: int = Field(ge=0)
+    time_us: float = Field(ge=0.0)
+    depth_m: float | None = Field(default=None, ge=0.0)
+    amplitude: float | None = None
+
+    @field_validator("amplitude", mode="before")
+    @classmethod
+    def parse_optional_echo_amplitude(cls, value: object) -> float | None:
+        return _to_finite_float_or_none(value)
+
+
+class NdtSignalAnalysisRecord(BaseModel):
+    """Intermediate signal-analysis output reused across API responses."""
+
+    total_peaks: int = Field(default=0, ge=0)
+    peak_indices: list[int] = Field(default_factory=list)
+    peak_times_us: list[float] = Field(default_factory=list)
+    front_wall: NdtWallEchoRecord | None = None
+    back_wall: NdtWallEchoRecord | None = None
+    estimated_thickness_mm: float | None = Field(default=None, ge=0.0)
+    nominal_thickness_mm: float | None = Field(default=None, ge=0.0)
+    thickness_error_mm: float | None = None
+    thinning_flag: bool = False
+
+    @model_validator(mode="after")
+    def validate_peak_vectors(self) -> "NdtSignalAnalysisRecord":
+        if len(self.peak_indices) != len(self.peak_times_us):
+            raise ValueError("peak_indices and peak_times_us must have identical lengths")
+        return self
+
+
 class NdtSampleRecord(BaseModel):
     """In-memory representation of one NDT sample with validated numeric arrays."""
 

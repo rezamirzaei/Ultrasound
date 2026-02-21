@@ -431,6 +431,19 @@ select {
   opacity: 0.85;
 }
 
+.signal-wall-marker {
+  stroke: rgba(125, 211, 252, 0.65);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.signal-wall-marker-label {
+  fill: #9ee7ff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.92;
+}
+
 .signal-error {
   color: #ffd8e2;
 }
