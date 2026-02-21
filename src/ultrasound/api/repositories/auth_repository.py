@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any, cast
 
 from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 
 from ultrasound.api.database.models import AuthTokenORM, AuthUserORM
 from ultrasound.api.database.session import DatabaseSessionManager
@@ -25,7 +27,7 @@ class AuthRepository:
 
     def list_users(self) -> list[AuthUserORM]:
         with self.db.session_scope() as session:
-            return session.scalars(select(AuthUserORM).order_by(AuthUserORM.username)).all()
+            return list(session.scalars(select(AuthUserORM).order_by(AuthUserORM.username)).all())
 
     def create_or_update_user(
         self,
@@ -116,7 +118,8 @@ class AuthRepository:
             ).all()
             if not stale_ids:
                 return 0
-            deleted = session.execute(
-                delete(AuthTokenORM).where(AuthTokenORM.id.in_(stale_ids))
-            ).rowcount
-            return int(deleted or 0)
+            result = cast(
+                CursorResult[Any],
+                session.execute(delete(AuthTokenORM).where(AuthTokenORM.id.in_(stale_ids))),
+            )
+            return int(result.rowcount or 0)
