@@ -135,6 +135,8 @@ Default sign-in accounts (change with `INPHASE_*_PASSWORD` env vars):
 Database:
 - Default DB URL: `sqlite:///data/inphase.sqlite3`
 - Override with `INPHASE_DATABASE_URL` (for Postgres/MySQL in production)
+- Auth users and token sessions are persisted in DB tables (`auth_users`, `auth_tokens`)
+- Set `INPHASE_FORCE_DEFAULT_USERS=1` to rotate default seeded passwords/roles from env.
 
 UI modules:
 - Dashboard: project summary + quick navigation
@@ -146,18 +148,19 @@ UI modules:
 Key API endpoints used by the UI:
 - `GET /api/v1/dashboard/summary`
 - `GET /api/v1/dashboard/readiness`
+- `POST /api/v1/auth/logout`
 - `GET /api/v1/datasets/busi/samples/{class_name}/{sample_index}`
 - `GET /api/v1/datasets/busi/training/latest?include_normal=false`
 - `POST /api/v1/datasets/busi/training/run`
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
 - `POST /api/v1/preprocessing/preview`
 - `POST /api/v1/ops/datasets/resync` (admin)
-- `POST /api/v1/ops/datasets/resync` (admin)
 
 Validation & reliability:
 - BUSI and NDT datasets are persisted in SQLite (`data/inphase.sqlite3`) and served through SQLAlchemy ORM repositories.
 - BUSI learning service trains from SQL-stored samples and persists run metrics + epoch curves.
 - API error analytics are persisted in DB for durable operational dashboards.
+- Auth is DB-backed with salted PBKDF2 password hashes and revocable token sessions.
 - Repository outputs are normalized into typed Pydantic domain objects before entering services.
 - API responses are strict Pydantic models (no NaN payload leaks to clients).
 - NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.

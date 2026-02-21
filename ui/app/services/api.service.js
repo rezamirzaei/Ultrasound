@@ -150,7 +150,24 @@
       };
 
       this.logout = function () {
-        clearSession();
+        if (!authSession || !authSession.access_token) {
+          clearSession();
+          return $q.when({ success: true, revoked_token: false });
+        }
+
+        return $http
+          .post(baseUrl + "/auth/logout", {}, withAuth())
+          .then(
+            function (response) {
+              return response.data;
+            },
+            function () {
+              return { success: true, revoked_token: false };
+            }
+          )
+          .finally(function () {
+            clearSession();
+          });
       };
 
       this.me = function () {

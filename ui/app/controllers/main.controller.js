@@ -54,11 +54,15 @@
       };
 
       vm.logout = function () {
-        ApiService.logout();
-        vm.authenticated = false;
-        vm.currentUser = null;
-        vm.authError = null;
-        $location.path("/dashboard");
+        vm.authLoading = true;
+        ApiService.logout()
+          .finally(function () {
+            vm.authenticated = false;
+            vm.currentUser = null;
+            vm.authError = null;
+            vm.authLoading = false;
+            $location.path("/dashboard");
+          });
       };
 
       var pageMap = {

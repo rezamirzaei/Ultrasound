@@ -128,6 +128,26 @@ def test_auth_login_and_me_endpoint(client: TestClient) -> None:
     assert me_payload["role"] == "viewer"
 
 
+def test_auth_logout_revokes_token(client: TestClient) -> None:
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "viewer", "password": "viewer123"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    logout_response = client.post("/api/v1/auth/logout", headers=headers)
+    assert logout_response.status_code == 200
+    payload = logout_response.json()
+    assert payload["success"] is True
+    assert payload["revoked_token"] is True
+
+    me_response = client.get("/api/v1/auth/me", headers=headers)
+    assert me_response.status_code == 401
+    assert "Token revoked" in me_response.json()["detail"]
+
+
 def test_protected_endpoint_requires_authentication(client: TestClient) -> None:
     response = client.get("/api/v1/dashboard/summary")
     assert response.status_code == 401

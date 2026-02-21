@@ -1,101 +1,165 @@
-"""Token-based authentication and role resolution."""
+"""Database-backed authentication and token session management."""
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
-import json
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Literal, cast
 
 from ultrasound.api.models.domain import AuthSessionRecord
+from ultrasound.api.repositories.auth_repository import AuthRepository
 
 
 class AuthService:
-    """Issues and validates signed bearer tokens for API requests."""
+    """Issues and validates bearer tokens persisted in the database."""
 
     ROLE_ORDER = {"viewer": 1, "analyst": 2, "admin": 3}
+    PASSWORD_SCHEME = "pbkdf2_sha256"
 
-    def __init__(self) -> None:
-        self.secret = os.getenv("INPHASE_AUTH_SECRET", "inphase-dev-secret-change-me").encode(
-            "utf-8"
-        )
+    def __init__(self, repository: AuthRepository) -> None:
+        self.repository = repository
         self.token_ttl_minutes = max(5, int(os.getenv("INPHASE_TOKEN_TTL_MINUTES", "480")))
-
-        self._users: dict[str, tuple[str, str]] = {
-            "viewer": (os.getenv("INPHASE_VIEWER_PASSWORD", "viewer123"), "viewer"),
-            "analyst": (os.getenv("INPHASE_ANALYST_PASSWORD", "analyst123"), "analyst"),
-            "admin": (os.getenv("INPHASE_ADMIN_PASSWORD", "admin123"), "admin"),
+        self.password_iterations = max(
+            120_000, int(os.getenv("INPHASE_PBKDF2_ITERATIONS", "260000"))
+        )
+        self.password_salt_bytes = max(16, int(os.getenv("INPHASE_PBKDF2_SALT_BYTES", "16")))
+        self.force_default_users = os.getenv("INPHASE_FORCE_DEFAULT_USERS", "0").strip() in {
+            "1",
+            "true",
+            "yes",
         }
+        self._bootstrap_default_users()
+
+    def _normalize_role(self, value: str) -> Literal["viewer", "analyst", "admin"]:
+        role = value.strip().lower()
+        if role not in self.ROLE_ORDER:
+            raise ValueError("Invalid role")
+        return cast(Literal["viewer", "analyst", "admin"], role)
+
+    def _hash_password(self, password: str) -> str:
+        salt = secrets.token_bytes(self.password_salt_bytes)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            self.password_iterations,
+        )
+        return f"{self.PASSWORD_SCHEME}${self.password_iterations}$" f"{salt.hex()}${digest.hex()}"
+
+    def _verify_password(self, password: str, password_hash: str) -> bool:
+        try:
+            scheme, iterations_raw, salt_hex, digest_hex = password_hash.split("$", 3)
+            iterations = int(iterations_raw)
+            salt = bytes.fromhex(salt_hex)
+            expected_digest = bytes.fromhex(digest_hex)
+        except Exception:
+            return False
+
+        if scheme != self.PASSWORD_SCHEME:
+            return False
+
+        computed = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            iterations,
+        )
+        return hmac.compare_digest(computed, expected_digest)
+
+    def _token_hash(self, token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def _to_utc(self, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def _bootstrap_default_users(self) -> None:
+        defaults = [
+            ("viewer", os.getenv("INPHASE_VIEWER_PASSWORD", "viewer123"), "viewer"),
+            ("analyst", os.getenv("INPHASE_ANALYST_PASSWORD", "analyst123"), "analyst"),
+            ("admin", os.getenv("INPHASE_ADMIN_PASSWORD", "admin123"), "admin"),
+        ]
+        for username, password, role in defaults:
+            self.repository.create_or_update_user(
+                username=username.strip().lower(),
+                role=self._normalize_role(role),
+                password_hash=self._hash_password(password),
+                is_active=True,
+                force_password_update=self.force_default_users,
+            )
+        self.repository.purge_expired_tokens()
 
     def authenticate(self, username: str, password: str) -> AuthSessionRecord:
         normalized = username.strip().lower()
-        entry = self._users.get(normalized)
-        if entry is None:
+        user = self.repository.get_user_by_username(normalized)
+        if user is None or not bool(user.is_active):
+            raise ValueError("Invalid credentials")
+        if not self._verify_password(password, str(user.password_hash)):
             raise ValueError("Invalid credentials")
 
-        expected_password, role = entry
-        if not hmac.compare_digest(expected_password, password):
-            raise ValueError("Invalid credentials")
-
+        expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=self.token_ttl_minutes)
         return AuthSessionRecord(
             username=normalized,
-            role=role,  # type: ignore[arg-type]
-            expires_at=datetime.now(tz=timezone.utc) + timedelta(minutes=self.token_ttl_minutes),
+            role=self._normalize_role(str(user.role)),
+            expires_at=expires_at,
         )
 
     def issue_token(self, session: AuthSessionRecord) -> str:
-        payload = {
-            "sub": session.username,
-            "role": session.role,
-            "exp": int(session.expires_at.timestamp()),
-            "iat": int(datetime.now(tz=timezone.utc).timestamp()),
-        }
-        payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-        payload_b64 = self._b64url_encode(payload_bytes)
-        signature = self._sign(payload_b64.encode("ascii"))
-        return f"{payload_b64}.{self._b64url_encode(signature)}"
+        user = self.repository.get_user_by_username(session.username.strip().lower())
+        if user is None or not bool(user.is_active):
+            raise ValueError("Invalid user")
+        if user.id is None:
+            raise ValueError("Invalid user id")
+
+        token = secrets.token_urlsafe(48)
+        self.repository.issue_token(
+            user_id=int(user.id),
+            token_hash=self._token_hash(token),
+            expires_at=self._to_utc(session.expires_at),
+        )
+        self.repository.purge_expired_tokens()
+        return token
 
     def verify_token(self, token: str) -> AuthSessionRecord:
         token = token.strip()
-        if "." not in token:
-            raise ValueError("Invalid token format")
+        if not token:
+            raise ValueError("Invalid token")
 
-        payload_b64, signature_b64 = token.split(".", 1)
-        expected_signature = self._sign(payload_b64.encode("ascii"))
-        provided_signature = self._b64url_decode(signature_b64)
-        if not hmac.compare_digest(expected_signature, provided_signature):
-            raise ValueError("Invalid token signature")
+        lookup = self.repository.get_token_with_user(self._token_hash(token))
+        if lookup is None:
+            raise ValueError("Invalid token")
 
-        payload = json.loads(self._b64url_decode(payload_b64).decode("utf-8"))
-        username = str(payload.get("sub", "")).strip().lower()
-        role = str(payload.get("role", "")).strip().lower()
-        exp_ts = int(payload.get("exp", 0))
-        if not username or role not in self.ROLE_ORDER:
-            raise ValueError("Invalid token payload")
+        token_row, user = lookup
+        now = datetime.now(tz=timezone.utc)
 
-        expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
-        if datetime.now(tz=timezone.utc) >= expires_at:
+        expires_at = self._to_utc(token_row.expires_at)
+        if token_row.revoked_at is not None:
+            raise ValueError("Token revoked")
+        if expires_at <= now:
             raise ValueError("Token expired")
+        if not bool(user.is_active):
+            raise ValueError("User is inactive")
+        if user.id is None or token_row.id is None:
+            raise ValueError("Invalid token state")
 
+        self.repository.touch_token(int(token_row.id))
         return AuthSessionRecord(
-            username=username,
-            role=role,  # type: ignore[arg-type]
+            username=str(user.username).strip().lower(),
+            role=self._normalize_role(str(user.role)),
             expires_at=expires_at,
         )
+
+    def revoke_token(self, token: str) -> bool:
+        token = token.strip()
+        if not token:
+            return False
+        return self.repository.revoke_token(self._token_hash(token))
 
     def has_role(self, actual_role: str, required_role: str) -> bool:
         actual_rank = self.ROLE_ORDER.get(actual_role, 0)
         required_rank = self.ROLE_ORDER.get(required_role, 10)
         return actual_rank >= required_rank
-
-    def _sign(self, payload: bytes) -> bytes:
-        return hmac.new(self.secret, payload, hashlib.sha256).digest()
-
-    def _b64url_encode(self, data: bytes) -> str:
-        return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
-
-    def _b64url_decode(self, value: str) -> bytes:
-        padding = "=" * (-len(value) % 4)
-        return base64.urlsafe_b64decode(value + padding)

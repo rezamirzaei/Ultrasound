@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ultrasound.api.config import AppConfig
 from ultrasound.api.database.session import DatabaseSessionManager
+from ultrasound.api.repositories.auth_repository import AuthRepository
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
 from ultrasound.api.services.auth_service import AuthService
 from ultrasound.api.services.busi_training_service import BusiTrainingService
@@ -25,8 +26,9 @@ class ApplicationContainer:
         )
         self.db = DatabaseSessionManager(database_url)
 
+        self.auth_repository = AuthRepository(self.db)
         self.dataset_repository = DatasetRepository(self.config, self.db)
-        self.auth_service = AuthService()
+        self.auth_service = AuthService(self.auth_repository)
         self.error_analytics_service = ErrorAnalyticsService(self.db)
         self.media_service = MediaService()
         self.ndt_detection_service = NdtDetectionService()

@@ -116,3 +116,38 @@ class ApiErrorEventORM(Base):
         Index("ix_api_error_events_occurred_at", "occurred_at"),
         Index("ix_api_error_events_status_path", "status_code", "path"),
     )
+
+
+class AuthUserORM(Base):
+    __tablename__ = "auth_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(64), nullable=False, unique=True)
+    role = Column(String(32), nullable=False)
+    password_hash = Column(String(512), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    tokens = relationship("AuthTokenORM", back_populates="user", cascade="all, delete-orphan")
+
+    __table_args__ = (Index("ix_auth_users_role_active", "role", "is_active"),)
+
+
+class AuthTokenORM(Base):
+    __tablename__ = "auth_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("auth_users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(128), nullable=False, unique=True)
+    issued_at = Column(DateTime(timezone=True), default=utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("AuthUserORM", back_populates="tokens")
+
+    __table_args__ = (
+        Index("ix_auth_tokens_expiry", "expires_at"),
+        Index("ix_auth_tokens_user_active", "user_id", "revoked_at"),
+    )

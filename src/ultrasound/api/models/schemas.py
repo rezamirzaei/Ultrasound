@@ -203,6 +203,12 @@ class AuthMeResponse(BaseModel):
     expires_at: datetime
 
 
+class LogoutResponse(BaseModel):
+    success: bool
+    username: str
+    revoked_token: bool
+
+
 class OpsErrorEvent(BaseModel):
     occurred_at: datetime
     request_id: str

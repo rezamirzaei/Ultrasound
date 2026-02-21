@@ -2,6 +2,8 @@
 
 from .models import (
     ApiErrorEventORM,
+    AuthTokenORM,
+    AuthUserORM,
     BusiSampleORM,
     BusiTrainingRunORM,
     DatasetMetaORM,
@@ -12,6 +14,8 @@ from .session import Base, DatabaseSessionManager
 
 __all__ = [
     "ApiErrorEventORM",
+    "AuthTokenORM",
+    "AuthUserORM",
     "Base",
     "BusiSampleORM",
     "BusiTrainingRunORM",
