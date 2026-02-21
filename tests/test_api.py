@@ -31,7 +31,7 @@ def _create_ndt_fixture(ndt_dir: Path) -> None:
         c=5900.0,
         thickness=0.01,
         description="Synthetic NDT sample for API tests",
-        defects=np.array([[0.005, 0.4]], dtype=np.float64),
+        defects=np.array([[0.005, 0.4], [0.007, np.nan]], dtype=np.float64),
     )
 
 
@@ -140,6 +140,9 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     assert len(signal["time_us"]) == signal["n_sampled_points"]
     assert len(signal["rf"]) == signal["n_sampled_points"]
     assert "stats" in signal
+    for marker in signal["defect_markers"]:
+        assert marker["depth_mm"] >= 0
+        assert marker["amplitude"] is None or isinstance(marker["amplitude"], float)
 
 
 def test_busi_sample_preview_endpoint(client: TestClient) -> None:

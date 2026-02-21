@@ -66,8 +66,8 @@ def compute_iou(
     pred = pred.flatten().astype(bool)
     target = target.flatten().astype(bool)
 
-    intersection = np.sum(pred & target)
-    union = np.sum(pred | target)
+    intersection = float(np.sum(pred & target))
+    union = float(np.sum(pred | target))
 
     iou = (intersection + smooth) / (union + smooth)
 

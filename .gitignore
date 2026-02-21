@@ -3,14 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
-
+docs/
 # Distribution / packaging
 *.egg-info/
 *.egg
 dist/
 build/
 wheels/
-docs/
+paper/
 # Virtual environments
 .venv/
 venv/
@@ -37,18 +37,10 @@ outputs/
 models/*.pth
 
 # LaTeX build artifacts
-paper/*.aux
-paper/*.log
-paper/*.out
-paper/*.synctex.gz
-paper/*.fls
-paper/*.fdb_latexmk
-paper/missfont.log
 
 # Log files
 *.log
 
-paper/*
 # Data (downloaded separately)
 data/busi/
 data/casting_defect/
@@ -72,3 +64,7 @@ coverage.xml
 
 # pytest
 .pytest_cache/
+
+# Misc generated files
+pip_list.txt
+output.log

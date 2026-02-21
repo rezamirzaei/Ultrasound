@@ -33,7 +33,10 @@
       <li><span>Points</span><strong>{{ vm.selected.n_points }}</strong></li>
       <li><span>fs (MHz)</span><strong>{{ vm.selected.fs_hz / 1000000 | number:2 }}</strong></li>
       <li><span>fc (MHz)</span><strong>{{ vm.selected.fc_hz / 1000000 | number:2 }}</strong></li>
-      <li><span>Thickness (mm)</span><strong>{{ vm.selected.thickness_mm | number:2 }}</strong></li>
+      <li>
+        <span>Thickness (mm)</span>
+        <strong>{{ vm.selected.thickness_mm == null ? 'N/A' : (vm.selected.thickness_mm | number:2) }}</strong>
+      </li>
       <li><span>Defects</span><strong>{{ vm.selected.n_defects }}</strong></li>
     </ul>
     <p class="note">{{ vm.selected.description }}</p>
@@ -50,7 +53,7 @@
         <tr ng-repeat="defect in vm.selected.defects">
           <td>{{$index + 1}}</td>
           <td>{{ defect.depth_m * 1000 | number:3 }}</td>
-          <td>{{ defect.amplitude | number:3 }}</td>
+          <td>{{ defect.amplitude == null ? 'N/A' : (defect.amplitude | number:3) }}</td>
         </tr>
       </tbody>
     </table>
@@ -111,5 +114,7 @@
         </li>
       </ul>
     </section>
+
+    <p class="note signal-error" ng-if="vm.signalError">{{ vm.signalError }}</p>
   </div>
 </section>

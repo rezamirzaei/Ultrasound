@@ -1,5 +1,6 @@
 # Ultrasound Imaging Toolkit
 
+[![CI](https://github.com/rezamirzaei/ultrasound-imaging-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/rezamirzaei/ultrasound-imaging-toolkit/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -138,11 +139,31 @@ Key API endpoints used by the UI:
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
 - `POST /api/v1/preprocessing/preview`
 
+Validation & reliability:
+- Repository outputs are normalized into typed Pydantic domain objects before entering services.
+- API responses are strict Pydantic models (no NaN payload leaks to clients).
+- NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.
+
 Run tests in Docker explicitly:
 
 ```bash
 docker compose --profile test run --rm test
 ```
+
+### Developer Commands
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install package in editable mode |
+| `make dev` | Install with dev dependencies (pytest, black, mypy) |
+| `make test` | Run test suite |
+| `make lint` | Check code formatting |
+| `make format` | Auto-format code |
+| `make typecheck` | Run mypy type checking |
+| `make demo` | Run CLI demo |
+| `make api` | Start REST API + UI server |
+| `make clean` | Remove build artifacts |
+| `make docker-test` | Run tests inside Docker |
 
 ---
 

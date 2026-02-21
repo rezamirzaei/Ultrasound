@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import base64
 from datetime import datetime, timezone
-from io import BytesIO
 
 import numpy as np
-from PIL import Image
 
 from ultrasound.api.models.schemas import (
     MethodMetrics,
@@ -16,6 +13,7 @@ from ultrasound.api.models.schemas import (
     PreprocessingRequest,
 )
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
+from ultrasound.api.services.media_service import MediaService
 from ultrasound.preprocessing.denoising import admm_tv_denoising
 from ultrasound.preprocessing.enhancement import ContrastEnhancer
 from ultrasound.preprocessing.speckle import SpeckleReducer
@@ -25,23 +23,9 @@ from ultrasound.utils.metrics import compute_psnr, compute_rmse, compute_ssim
 class PreprocessingService:
     """Orchestrates preprocessing algorithm runs for API consumers."""
 
-    def __init__(self, dataset_repository: DatasetRepository):
+    def __init__(self, dataset_repository: DatasetRepository, media_service: MediaService):
         self.dataset_repository = dataset_repository
-
-    def _as_data_url(self, image: np.ndarray) -> str:
-        """Convert an image array to a browser-ready PNG data URL."""
-        if image.dtype != np.uint8:
-            image = np.clip(image, 0, 255).astype(np.uint8)
-
-        if image.ndim == 2:
-            pil = Image.fromarray(image, mode="L")
-        else:
-            pil = Image.fromarray(image)
-
-        buffer = BytesIO()
-        pil.save(buffer, format="PNG")
-        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
+        self.media_service = media_service
 
     def _method_metrics(
         self,
@@ -57,10 +41,11 @@ class PreprocessingService:
         )
 
     def preview(self, request: PreprocessingRequest) -> PreprocessingPreviewResponse:
-        image_rgb, _ = self.dataset_repository.get_busi_sample(
+        sample = self.dataset_repository.get_busi_sample(
             class_name=request.class_name,
             index=request.sample_index,
         )
+        image_rgb = sample.image_rgb
         gray = np.mean(image_rgb, axis=2).astype(np.uint8)
 
         lee = SpeckleReducer(method="lee", window_size=7)
@@ -86,22 +71,22 @@ class PreprocessingService:
         methods = [
             MethodPreview(
                 name="Lee Filter",
-                image_data_url=self._as_data_url(img_lee),
+                image_data_url=self.media_service.as_png_data_url(img_lee),
                 metrics=self._method_metrics(img_lee, gray, cv_lee),
             ),
             MethodPreview(
                 name="Frost Filter",
-                image_data_url=self._as_data_url(img_frost),
+                image_data_url=self.media_service.as_png_data_url(img_frost),
                 metrics=self._method_metrics(img_frost, gray, cv_frost),
             ),
             MethodPreview(
                 name="CLAHE",
-                image_data_url=self._as_data_url(img_clahe),
+                image_data_url=self.media_service.as_png_data_url(img_clahe),
                 metrics=self._method_metrics(img_clahe, gray, cv_clahe),
             ),
             MethodPreview(
                 name="ADMM-TV",
-                image_data_url=self._as_data_url(img_tv),
+                image_data_url=self.media_service.as_png_data_url(img_tv),
                 metrics=self._method_metrics(img_tv, gray, cv_tv),
             ),
         ]
@@ -110,7 +95,7 @@ class PreprocessingService:
 
         return PreprocessingPreviewResponse(
             image_shape=[int(v) for v in image_rgb.shape],
-            original_image_data_url=self._as_data_url(gray),
+            original_image_data_url=self.media_service.as_png_data_url(gray),
             methods=methods,
             recommendation=recommendation,
             generated_at=datetime.now(tz=timezone.utc),

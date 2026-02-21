@@ -3,14 +3,14 @@
 
   angular.module("inPhaseApp").controller("NdtController", [
     "ApiService",
-    "$q",
-    function (ApiService, $q) {
+    function (ApiService) {
       var vm = this;
 
       vm.loading = true;
       vm.detailLoading = false;
       vm.signalLoading = false;
       vm.error = null;
+      vm.signalError = null;
       vm.samples = [];
       vm.searchQuery = "";
       vm.selectedName = null;
@@ -100,13 +100,14 @@
 
       function loadSignal(sampleName) {
         vm.signalLoading = true;
+        vm.signalError = null;
         ApiService.getNdtSignal(sampleName, vm.maxSignalPoints)
           .then(function (data) {
             vm.signal = data;
             vm.chart = buildSignalChart(data);
           })
           .catch(function (error) {
-            vm.error = error.detail || "Failed to load NDT waveform preview";
+            vm.signalError = error.detail || "Failed to load NDT waveform preview";
             vm.signal = null;
             vm.chart = null;
           })
@@ -119,24 +120,21 @@
         vm.selectedName = sampleName;
         vm.detailLoading = true;
         vm.error = null;
+        vm.signalError = null;
         vm.signal = null;
         vm.chart = null;
 
-        $q.all([ApiService.getNdtSample(sampleName), ApiService.getNdtSignal(sampleName, vm.maxSignalPoints)])
-          .then(function (responses) {
-            vm.selected = responses[0];
-            vm.signal = responses[1];
-            vm.chart = buildSignalChart(vm.signal);
+        ApiService.getNdtSample(sampleName)
+          .then(function (detail) {
+            vm.selected = detail;
+            loadSignal(sampleName);
           })
           .catch(function (error) {
             vm.error = error.detail || "Failed to load sample details";
             vm.selected = null;
-            vm.signal = null;
-            vm.chart = null;
           })
           .finally(function () {
             vm.detailLoading = false;
-            vm.signalLoading = false;
           });
       };
 

@@ -420,6 +420,10 @@ select {
   stroke-dasharray: 4 3;
 }
 
+.signal-error {
+  color: #ffd8e2;
+}
+
 @media (max-width: 1024px) {
   .shell {
     grid-template-columns: 1fr;

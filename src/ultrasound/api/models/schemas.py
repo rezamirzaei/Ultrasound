@@ -22,7 +22,7 @@ class DashboardSummaryResponse(BaseModel):
 
 
 class DataReadinessResponse(BaseModel):
-    status: str
+    status: str = Field(pattern="^(ok|warning)$")
     busi_available_classes: List[str]
     busi_missing_classes: List[str]
     ndt_samples: int
@@ -32,36 +32,41 @@ class DataReadinessResponse(BaseModel):
 
 class NdtSampleSummary(BaseModel):
     name: str
-    n_points: int
-    fs_hz: float
-    fc_hz: float
-    thickness_mm: float
-    n_defects: int
+    n_points: int = Field(gt=0)
+    fs_hz: float = Field(gt=0)
+    fc_hz: float = Field(gt=0)
+    thickness_mm: float | None = None
+    n_defects: int = Field(ge=0)
+
+
+class NdtDefect(BaseModel):
+    depth_m: float | None = None
+    amplitude: float | None = None
 
 
 class NdtSampleDetail(NdtSampleSummary):
     description: str
-    defects: List[dict]
+    defects: List[NdtDefect]
 
 
 class NdtSignalStats(BaseModel):
     amplitude_min: float
     amplitude_max: float
-    amplitude_rms: float
+    amplitude_rms: float = Field(ge=0)
     time_start_us: float
     time_end_us: float
 
 
 class NdtDefectMarker(BaseModel):
-    depth_mm: float
-    amplitude: float
-    two_way_time_us: float
+    depth_mm: float = Field(ge=0)
+    amplitude: float | None = None
+    two_way_time_us: float = Field(ge=0)
 
 
 class NdtSignalPreview(BaseModel):
     sample_name: str
-    n_original_points: int
-    n_sampled_points: int
+    n_original_points: int = Field(gt=0)
+    n_sampled_points: int = Field(gt=0)
     time_us: List[float]
     rf: List[float]
     stats: NdtSignalStats
@@ -70,12 +75,12 @@ class NdtSignalPreview(BaseModel):
 
 class BusiSamplePreview(BaseModel):
     class_name: str
-    requested_index: int
-    resolved_index: int
-    total_samples: int
+    requested_index: int = Field(ge=0)
+    resolved_index: int = Field(ge=0)
+    total_samples: int = Field(gt=0)
     image_shape: List[int]
-    lesion_pixels: int
-    lesion_ratio: float
+    lesion_pixels: int = Field(ge=0)
+    lesion_ratio: float = Field(ge=0.0, le=1.0)
     image_data_url: str
     mask_data_url: str
 

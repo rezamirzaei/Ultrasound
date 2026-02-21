@@ -14,7 +14,7 @@ Author: Reza Mirzaeifard, PhD
 Email: reza.mirzaeifard@gmail.com
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __author__ = "Reza Mirzaeifard"
 
 from .models import UltrasoundClassifier, UNet

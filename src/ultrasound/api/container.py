@@ -5,6 +5,7 @@ from __future__ import annotations
 from ultrasound.api.config import AppConfig
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
 from ultrasound.api.services.dashboard_service import DashboardService
+from ultrasound.api.services.media_service import MediaService
 from ultrasound.api.services.preprocessing_service import PreprocessingService
 
 
@@ -15,5 +16,8 @@ class ApplicationContainer:
         self.config = config or AppConfig.from_project_root()
 
         self.dataset_repository = DatasetRepository(self.config)
-        self.dashboard_service = DashboardService(self.dataset_repository)
-        self.preprocessing_service = PreprocessingService(self.dataset_repository)
+        self.media_service = MediaService()
+        self.dashboard_service = DashboardService(self.dataset_repository, self.media_service)
+        self.preprocessing_service = PreprocessingService(
+            self.dataset_repository, self.media_service
+        )

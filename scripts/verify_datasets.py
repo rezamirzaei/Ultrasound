@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify all downloaded datasets."""
+
 from pathlib import Path
 
 data_path = Path(__file__).parent.parent / "data"
@@ -12,22 +13,22 @@ datasets = {
     "BUSI (Medical Ultrasound)": {
         "path": data_path / "busi",
         "extensions": ["*.png"],
-        "exclude": "_mask"
+        "exclude": "_mask",
     },
     "Steel Defect (NEU)": {
         "path": data_path / "steel_defect",
         "extensions": ["*.jpg", "*.png", "*.bmp"],
-        "exclude": None
+        "exclude": None,
     },
     "Casting Defect": {
         "path": data_path / "casting_defect",
         "extensions": ["*.jpeg", "*.png"],
-        "exclude": None
+        "exclude": None,
     },
     "NEU Surface Defect": {
         "path": data_path / "neu_surface",
         "extensions": ["*.jpg", "*.png", "*.bmp"],
-        "exclude": None
+        "exclude": None,
     },
 }
 
@@ -50,4 +51,3 @@ for name, config in datasets.items():
 print("-" * 60)
 print(f"{'TOTAL':30} {total:,} images")
 print("=" * 60)
-

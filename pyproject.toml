@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ultrasound-imaging-toolkit"
-version = "0.1.0"
+version = "1.0.0"
 description = "Ultrasound Image Processing and Analysis Toolkit - Demonstrating signal processing, image analysis, and ML for medical ultrasound applications"
 readme = "README.md"
 license = "MIT"
