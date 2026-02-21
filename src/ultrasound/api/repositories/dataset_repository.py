@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -26,7 +27,9 @@ from ultrasound.api.models.domain import (
     BusiSampleRecord,
     BusiTrainingRunRecord,
     BusiTrainingSampleRecord,
+    BusiUploadRecord,
     IndustrialSampleRecord,
+    IndustrialUploadRecord,
     NdtDefectRecord,
     NdtSampleRecord,
 )
@@ -38,6 +41,11 @@ class DatasetRepository:
     CLASSES = ("benign", "malignant", "normal")
     CLASS_TO_LABEL = {"benign": 0, "malignant": 1, "normal": 2}
     INDUSTRIAL_DATASETS = ("steel_defect", "neu_surface", "casting_defect")
+    INDUSTRIAL_SPLITS = {
+        "steel_defect": {"train", "valid", "test"},
+        "neu_surface": {"train", "validation"},
+        "casting_defect": {"train", "test", "full"},
+    }
 
     def __init__(self, config: AppConfig, db: DatabaseSessionManager):
         self.config = config
@@ -80,6 +88,34 @@ class DatasetRepository:
             buffer = BytesIO()
             mask_gray.save(buffer, format="PNG")
         return buffer.getvalue()
+
+    def _canonical_png_rgb_bytes(self, image_blob: bytes) -> tuple[bytes, int, int]:
+        with Image.open(BytesIO(image_blob)) as pil_image:
+            image_rgb = pil_image.convert("RGB")
+            width, height = image_rgb.size
+            buffer = BytesIO()
+            image_rgb.save(buffer, format="PNG")
+        return buffer.getvalue(), int(width), int(height)
+
+    def _canonical_png_mask_bytes(
+        self, mask_blob: bytes | None, width: int, height: int
+    ) -> bytes | None:
+        if mask_blob is None:
+            return None
+        with Image.open(BytesIO(mask_blob)) as pil_mask:
+            mask_gray = pil_mask.convert("L")
+            if mask_gray.size != (width, height):
+                mask_gray = mask_gray.resize((width, height), Image.Resampling.NEAREST)
+            buffer = BytesIO()
+            mask_gray.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def _safe_filename(self, filename: str, default_stem: str) -> str:
+        stem = Path(filename).stem if filename else ""
+        stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_").lower()
+        if not stem:
+            stem = default_stem
+        return f"{stem}.png"
 
     def _decode_rgb_blob(self, blob: bytes) -> np.ndarray:
         with Image.open(BytesIO(blob)) as pil_image:
@@ -552,6 +588,190 @@ class DatasetRepository:
             image_path=self.config.busi_dir / class_name / sample.image_filename,
             image_rgb=image_rgb,
             mask=mask,
+        )
+
+    def add_busi_uploaded_sample(
+        self,
+        class_name: str,
+        split: str,
+        image_filename: str,
+        image_blob: bytes,
+        mask_blob: bytes | None = None,
+    ) -> BusiUploadRecord:
+        normalized_class = class_name.strip().lower()
+        if normalized_class not in self.CLASSES:
+            raise ValueError(f"Invalid BUSI class '{class_name}'. Expected one of {self.CLASSES}.")
+
+        normalized_split = split.strip().lower()
+        if normalized_split not in {"train", "test"}:
+            raise ValueError("BUSI split must be 'train' or 'test'.")
+
+        image_png, width, height = self._canonical_png_rgb_bytes(image_blob)
+        mask_png = self._canonical_png_mask_bytes(mask_blob, width=width, height=height)
+        safe_filename = self._safe_filename(
+            image_filename, default_stem=f"{normalized_class}_uploaded"
+        )
+        source_hash = hashlib.sha256(image_png + (mask_png or b"")).hexdigest()
+
+        with self.db.session_scope() as session:
+            row = session.scalars(
+                select(BusiSampleORM)
+                .where(
+                    BusiSampleORM.class_name == normalized_class,
+                    BusiSampleORM.image_filename == safe_filename,
+                )
+                .limit(1)
+            ).first()
+            if row is None:
+                row = BusiSampleORM(
+                    class_name=normalized_class,
+                    image_filename=safe_filename,
+                    sample_stem=Path(safe_filename).stem,
+                    image_blob=image_png,
+                    mask_blob=mask_png,
+                    width=width,
+                    height=height,
+                    label=self.CLASS_TO_LABEL[normalized_class],
+                    split=normalized_split,
+                    source_hash=source_hash,
+                )
+                session.add(row)
+            else:
+                row.sample_stem = Path(safe_filename).stem
+                row.image_blob = image_png
+                row.mask_blob = mask_png
+                row.width = width
+                row.height = height
+                row.label = self.CLASS_TO_LABEL[normalized_class]
+                row.split = normalized_split
+                row.source_hash = source_hash
+            session.flush()
+
+            if row.id is None or row.created_at is None:
+                raise RuntimeError("Could not persist uploaded BUSI sample.")
+
+            total_class_samples = int(
+                session.scalar(
+                    select(func.count(BusiSampleORM.id)).where(
+                        BusiSampleORM.class_name == normalized_class
+                    )
+                )
+                or 0
+            )
+            sample_id = int(row.id)
+            created_at = row.created_at
+
+        return BusiUploadRecord(
+            sample_id=sample_id,
+            class_name=cast(Literal["benign", "malignant", "normal"], normalized_class),
+            split=cast(Literal["train", "test"], normalized_split),
+            image_filename=safe_filename,
+            total_class_samples=total_class_samples,
+            created_at=created_at,
+        )
+
+    def add_industrial_uploaded_sample(
+        self,
+        dataset_name: str,
+        split: str,
+        class_name: str,
+        image_filename: str,
+        image_blob: bytes,
+        annotation_blob: bytes | None = None,
+    ) -> IndustrialUploadRecord:
+        normalized_dataset = dataset_name.strip().lower()
+        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
+            raise ValueError(
+                f"Invalid dataset '{dataset_name}'. Expected one of {self.INDUSTRIAL_DATASETS}."
+            )
+
+        normalized_split = split.strip().lower()
+        allowed_splits = self.INDUSTRIAL_SPLITS[normalized_dataset]
+        if normalized_split not in allowed_splits:
+            raise ValueError(
+                f"Invalid split '{split}' for dataset '{normalized_dataset}'. "
+                f"Expected one of {sorted(allowed_splits)}."
+            )
+
+        normalized_class = re.sub(r"[^a-zA-Z0-9_-]+", "_", class_name.strip().lower()).strip("_")
+        if not normalized_class:
+            raise ValueError("class_name must not be empty")
+
+        image_png, width, height = self._canonical_png_rgb_bytes(image_blob)
+        safe_filename = self._safe_filename(
+            image_filename,
+            default_stem=f"{normalized_dataset}_{normalized_split}_{normalized_class}_uploaded",
+        )
+        relative_path = (
+            f"uploads/{normalized_dataset}/{normalized_split}/{normalized_class}/{safe_filename}"
+        )
+        source_hash = hashlib.sha256(
+            image_png + (annotation_blob or b"") + relative_path.encode("utf-8")
+        ).hexdigest()
+
+        with self.db.session_scope() as session:
+            row = session.scalars(
+                select(IndustrialSampleORM)
+                .where(
+                    IndustrialSampleORM.dataset_name == normalized_dataset,
+                    IndustrialSampleORM.relative_path == relative_path,
+                )
+                .limit(1)
+            ).first()
+            if row is None:
+                row = IndustrialSampleORM(
+                    dataset_name=normalized_dataset,
+                    split=normalized_split,
+                    class_name=normalized_class,
+                    image_filename=safe_filename,
+                    relative_path=relative_path,
+                    image_blob=image_png,
+                    annotation_blob=annotation_blob,
+                    width=width,
+                    height=height,
+                    source_hash=source_hash,
+                )
+                session.add(row)
+            else:
+                row.split = normalized_split
+                row.class_name = normalized_class
+                row.image_filename = safe_filename
+                row.image_blob = image_png
+                row.annotation_blob = annotation_blob
+                row.width = width
+                row.height = height
+                row.source_hash = source_hash
+            session.flush()
+
+            if row.id is None or row.created_at is None:
+                raise RuntimeError("Could not persist uploaded industrial sample.")
+
+            total_class_samples = int(
+                session.scalar(
+                    select(func.count(IndustrialSampleORM.id)).where(
+                        IndustrialSampleORM.dataset_name == normalized_dataset,
+                        IndustrialSampleORM.split == normalized_split,
+                        IndustrialSampleORM.class_name == normalized_class,
+                    )
+                )
+                or 0
+            )
+            sample_id = int(row.id)
+            created_at = row.created_at
+
+        return IndustrialUploadRecord(
+            sample_id=sample_id,
+            dataset_name=cast(
+                Literal["steel_defect", "neu_surface", "casting_defect"],
+                normalized_dataset,
+            ),
+            split=normalized_split,
+            class_name=normalized_class,
+            image_filename=safe_filename,
+            relative_path=relative_path,
+            has_annotation=annotation_blob is not None,
+            total_class_samples=total_class_samples,
+            created_at=created_at,
         )
 
     def list_busi_training_samples(

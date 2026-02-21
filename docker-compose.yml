@@ -12,7 +12,7 @@ services:
       - ./ui:/app/ui
     environment:
       - PYTHONPATH=/app/src
-    command: ["python", "-m", "ultrasound.api"]
+    command: ["bash", "-lc", "alembic upgrade head && python -m ultrasound.api"]
 
   test:
     profiles: ["test"]

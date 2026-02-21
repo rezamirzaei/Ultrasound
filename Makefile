@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck clean docker-test demo api e2e
+.PHONY: install dev test lint format typecheck clean docker-test demo api e2e db-upgrade db-downgrade db-revision
 
 install:
 	python -m pip install -e .
@@ -36,3 +36,12 @@ docker-test:
 
 e2e:
 	pytest e2e/ -v --tb=short
+
+db-upgrade:
+	alembic upgrade head
+
+db-downgrade:
+	alembic downgrade -1
+
+db-revision:
+	alembic revision --autogenerate -m "$(m)"

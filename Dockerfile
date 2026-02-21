@@ -13,6 +13,8 @@ WORKDIR /app
 
 # Copy only files needed to install and run the package.
 COPY pyproject.toml README.md ./
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 COPY src/ ./src/
 COPY main.py ./
 COPY ui/ ./ui/

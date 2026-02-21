@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Any, Dict, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -243,6 +243,46 @@ class IndustrialSampleRecord(BaseModel):
         if image.ndim != 3 or image.shape[2] != 3:
             raise ValueError("Industrial sample image must be RGB with shape [H, W, 3]")
         return image
+
+
+class BusiUploadRecord(BaseModel):
+    """Metadata for one uploaded BUSI sample stored in SQL."""
+
+    sample_id: int = Field(ge=1)
+    class_name: Literal["benign", "malignant", "normal"]
+    split: Literal["train", "test"]
+    image_filename: str
+    total_class_samples: int = Field(ge=1)
+    created_at: datetime
+
+
+class IndustrialUploadRecord(BaseModel):
+    """Metadata for one uploaded industrial sample stored in SQL."""
+
+    sample_id: int = Field(ge=1)
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"]
+    split: str
+    class_name: str
+    image_filename: str
+    relative_path: str
+    has_annotation: bool = False
+    total_class_samples: int = Field(ge=1)
+    created_at: datetime
+
+
+class JobRunRecord(BaseModel):
+    """Background job state persisted in SQL."""
+
+    id: int = Field(ge=1)
+    job_type: Literal["busi_training", "dataset_resync"]
+    status: Literal["pending", "running", "completed", "failed"]
+    requested_by: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error_message: str | None = None
+    submitted_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class AuthSessionRecord(BaseModel):

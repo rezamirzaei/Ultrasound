@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Generator
+from io import BytesIO
 from pathlib import Path
 
 import numpy as np
@@ -74,7 +77,7 @@ def _create_industrial_fixture(data_dir: Path) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
+def client(tmp_path: Path) -> Generator[TestClient, None, None]:
     """Create an isolated app instance with synthetic data and UI fixtures."""
     data_dir = tmp_path / "data"
     busi_dir = data_dir / "busi"
@@ -96,7 +99,8 @@ def client(tmp_path: Path) -> TestClient:
         artifacts_dir=artifacts_dir,
     )
     app = create_app(config=config)
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def _auth_headers(
@@ -704,3 +708,171 @@ def test_ops_error_analytics_admin_only(client: TestClient) -> None:
     assert resync_payload["industrial_rows_synced"] >= 0
     assert len(recent_payload) >= 1
     assert "request_id" in recent_payload[0]
+
+
+def test_metrics_endpoint_exposes_prometheus_counters(client: TestClient) -> None:
+    # Trigger a few API calls before reading metrics.
+    headers = _auth_headers(client)
+    health = client.get("/api/v1/health")
+    assert health.status_code == 200
+    summary = client.get("/api/v1/dashboard/summary", headers=headers)
+    assert summary.status_code == 200
+
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "inphase_http_requests_total" in response.text
+    assert "inphase_http_request_duration_seconds" in response.text
+
+
+def test_async_learning_job_queue_runs_training(client: TestClient) -> None:
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
+
+    enqueue = client.post(
+        "/api/v1/learning/jobs/busi-training",
+        json={
+            "include_normal": False,
+            "epochs": 3,
+            "batch_size": 4,
+            "learning_rate": 0.02,
+        },
+        headers=analyst_headers,
+    )
+    assert enqueue.status_code == 200
+    job_id = int(enqueue.json()["job_id"])
+
+    status_payload = None
+    for _ in range(60):
+        status_response = client.get(f"/api/v1/learning/jobs/{job_id}", headers=analyst_headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.1)
+
+    assert status_payload is not None
+    assert status_payload["status"] == "completed"
+    assert status_payload["result"] is not None
+    assert status_payload["result"]["epochs"] == 3
+
+    latest = client.get("/api/v1/datasets/busi/training/latest", headers=analyst_headers)
+    assert latest.status_code == 200
+    latest_payload = latest.json()
+    assert latest_payload["run_id"] is not None
+
+
+def test_async_resync_job_queue_admin_only(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+    admin_headers = _auth_headers(client, username="admin", password="admin123")
+
+    forbidden = client.post("/api/v1/learning/jobs/datasets-resync", headers=viewer_headers)
+    assert forbidden.status_code == 403
+
+    enqueue = client.post("/api/v1/learning/jobs/datasets-resync", headers=admin_headers)
+    assert enqueue.status_code == 200
+    job_id = int(enqueue.json()["job_id"])
+
+    status_payload = None
+    for _ in range(80):
+        status_response = client.get(f"/api/v1/learning/jobs/{job_id}", headers=admin_headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.05)
+
+    assert status_payload is not None
+    assert status_payload["status"] == "completed"
+    assert status_payload["result"] is not None
+    assert int(status_payload["result"]["busi_rows_synced"]) >= 0
+
+
+def test_upload_endpoints_store_busi_and_industrial_samples_in_sql(client: TestClient) -> None:
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
+
+    image_rgb = np.zeros((48, 48, 3), dtype=np.uint8)
+    image_rgb[:, :, 1] = 180
+    mask_gray = np.zeros((48, 48), dtype=np.uint8)
+    mask_gray[12:30, 14:34] = 255
+
+    img_buffer = BytesIO()
+    Image.fromarray(image_rgb, mode="RGB").save(img_buffer, format="PNG")
+    mask_buffer = BytesIO()
+    Image.fromarray(mask_gray, mode="L").save(mask_buffer, format="PNG")
+
+    busi_upload = client.post(
+        "/api/v1/datasets/busi/upload",
+        data={"class_name": "benign", "split": "train"},
+        files={
+            "image": ("uploaded_case.png", img_buffer.getvalue(), "image/png"),
+            "mask": ("uploaded_case_mask.png", mask_buffer.getvalue(), "image/png"),
+        },
+        headers=analyst_headers,
+    )
+    assert busi_upload.status_code == 200
+    busi_payload = busi_upload.json()
+    assert busi_payload["storage"] == "sql"
+    assert busi_payload["class_name"] == "benign"
+    assert busi_payload["total_class_samples"] >= 1
+
+    preview = client.get("/api/v1/datasets/busi/samples/benign/0", headers=analyst_headers)
+    assert preview.status_code == 200
+    assert preview.json()["total_samples"] >= 1
+
+    industrial_buffer = BytesIO()
+    Image.fromarray(np.full((42, 42, 3), 90, dtype=np.uint8), mode="RGB").save(
+        industrial_buffer, format="PNG"
+    )
+    xml_blob = b"<annotation><object><name>crazing</name></object></annotation>"
+
+    industrial_upload = client.post(
+        "/api/v1/datasets/industrial/upload",
+        data={
+            "dataset_name": "neu_surface",
+            "split": "train",
+            "class_name": "crazing",
+        },
+        files={
+            "image": ("neu_uploaded.png", industrial_buffer.getvalue(), "image/png"),
+            "annotation": ("neu_uploaded.xml", xml_blob, "application/xml"),
+        },
+        headers=analyst_headers,
+    )
+    assert industrial_upload.status_code == 200
+    industrial_payload = industrial_upload.json()
+    assert industrial_payload["storage"] == "sql"
+    assert industrial_payload["dataset_name"] == "neu_surface"
+    assert industrial_payload["has_annotation"] is True
+
+    summary = client.get("/api/v1/datasets/industrial/summary", headers=analyst_headers)
+    assert summary.status_code == 200
+    summary_payload = summary.json()
+    assert summary_payload["totals_by_dataset"]["neu_surface"] >= 1
+
+
+def test_upload_endpoints_require_analyst_role(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+
+    img_buffer = BytesIO()
+    Image.fromarray(np.full((24, 24, 3), 30, dtype=np.uint8), mode="RGB").save(
+        img_buffer, format="PNG"
+    )
+
+    forbidden_busi = client.post(
+        "/api/v1/datasets/busi/upload",
+        data={"class_name": "benign", "split": "train"},
+        files={"image": ("forbidden.png", img_buffer.getvalue(), "image/png")},
+        headers=viewer_headers,
+    )
+    assert forbidden_busi.status_code == 403
+
+    forbidden_industrial = client.post(
+        "/api/v1/datasets/industrial/upload",
+        data={
+            "dataset_name": "steel_defect",
+            "split": "train",
+            "class_name": "crazing",
+        },
+        files={"image": ("forbidden.png", img_buffer.getvalue(), "image/png")},
+        headers=viewer_headers,
+    )
+    assert forbidden_industrial.status_code == 403

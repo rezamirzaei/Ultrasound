@@ -265,6 +265,48 @@
         return unwrap($http.post(baseUrl + "/datasets/busi/training/run", payload, withAuth()));
       };
 
+      this.enqueueBusiTrainingJob = function (payload) {
+        return unwrap($http.post(baseUrl + "/learning/jobs/busi-training", payload, withAuth()));
+      };
+
+      this.enqueueDatasetResyncJob = function () {
+        return unwrap($http.post(baseUrl + "/learning/jobs/datasets-resync", {}, withAuth()));
+      };
+
+      this.listLearningJobs = function (limit) {
+        return unwrap($http.get(baseUrl + "/learning/jobs", withAuth({ params: { limit: limit || 30 } })));
+      };
+
+      this.getLearningJob = function (jobId) {
+        return unwrap($http.get(baseUrl + "/learning/jobs/" + encodeURIComponent(String(jobId)), withAuth()));
+      };
+
+      this.uploadBusiSample = function (formData) {
+        return unwrap(
+          $http.post(
+            baseUrl + "/datasets/busi/upload",
+            formData,
+            withAuth({
+              transformRequest: angular.identity,
+              headers: { "Content-Type": undefined },
+            })
+          )
+        );
+      };
+
+      this.uploadIndustrialSample = function (formData) {
+        return unwrap(
+          $http.post(
+            baseUrl + "/datasets/industrial/upload",
+            formData,
+            withAuth({
+              transformRequest: angular.identity,
+              headers: { "Content-Type": undefined },
+            })
+          )
+        );
+      };
+
       this.listNdtSamples = function () {
         return unwrap($http.get(baseUrl + "/datasets/ndt/samples", withAuth()));
       };

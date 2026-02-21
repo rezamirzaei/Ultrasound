@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Literal
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -148,6 +148,45 @@ class BusiTrainingResponse(BaseModel):
     test_loss: float | None = Field(default=None, ge=0.0)
     curve: List[BusiTrainingCurvePoint] = Field(default_factory=list)
     notes: str | None = None
+
+
+class JobEnqueueResponse(BaseModel):
+    job_id: int = Field(ge=1)
+    job_type: Literal["busi_training", "dataset_resync"]
+    status: Literal["pending", "running", "completed", "failed"]
+    requested_by: str
+    submitted_at: datetime
+
+
+class JobRunResponse(JobEnqueueResponse):
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    result: Dict[str, Any] | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class BusiUploadResponse(BaseModel):
+    sample_id: int = Field(ge=1)
+    class_name: Literal["benign", "malignant", "normal"]
+    split: Literal["train", "test"]
+    image_filename: str
+    total_class_samples: int = Field(ge=1)
+    storage: Literal["sql"] = "sql"
+    created_at: datetime
+
+
+class IndustrialUploadResponse(BaseModel):
+    sample_id: int = Field(ge=1)
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"]
+    split: str
+    class_name: str
+    image_filename: str
+    relative_path: str
+    has_annotation: bool = False
+    total_class_samples: int = Field(ge=1)
+    storage: Literal["sql"] = "sql"
+    created_at: datetime
 
 
 class IndustrialDatasetRow(BaseModel):

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import time
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ultrasound.api.config import AppConfig
@@ -16,10 +19,13 @@ from ultrasound.api.controllers import (
     auth_router,
     dashboard_router,
     health_router,
+    mlops_router,
     ops_router,
     preprocessing_router,
 )
 from ultrasound.api.models.schemas import ApiError
+
+logger = logging.getLogger("inphase.api")
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -27,10 +33,19 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     resolved_config = config or AppConfig.from_project_root()
     container = ApplicationContainer(resolved_config)
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        container.job_queue_service.start()
+        try:
+            yield
+        finally:
+            container.job_queue_service.stop()
+
     app = FastAPI(
         title="Ultrasound Imaging Toolkit API",
         version="1.0.0",
         description="REST API + AngularJS MVC UI for ultrasound analytics workflows.",
+        lifespan=lifespan,
     )
 
     app.state.container = container
@@ -49,6 +64,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(dashboard_router, prefix=api_prefix)
     app.include_router(preprocessing_router, prefix=api_prefix)
     app.include_router(ops_router, prefix=api_prefix)
+    app.include_router(mlops_router, prefix=api_prefix)
 
     def _request_id(request: Request) -> str:
         return str(getattr(request.state, "request_id", ""))
@@ -77,12 +93,48 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             role=_resolve_role(request),
         )
 
+    def _route_template(request: Request) -> str:
+        route = request.scope.get("route")
+        if route is not None:
+            path = getattr(route, "path", None)
+            if isinstance(path, str) and path:
+                return path
+        return request.url.path
+
     @app.middleware("http")
     async def request_context_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
         request.state.request_id = uuid4().hex
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = _request_id(request)
-        return response
+        started = time.perf_counter()
+        status_code = 500
+        route_template = _route_template(request)
+        response: Response | None = None
+        try:
+            response = await call_next(request)
+            status_code = int(response.status_code)
+            response.headers["X-Request-ID"] = _request_id(request)
+            return response
+        except Exception as exc:
+            container.observability_service.observe_http_exception(
+                route=route_template,
+                exception_type=exc.__class__.__name__,
+            )
+            raise
+        finally:
+            duration = max(0.0, time.perf_counter() - started)
+            container.observability_service.observe_http_request(
+                method=request.method,
+                route=route_template,
+                status_code=status_code,
+                duration_seconds=duration,
+            )
+            logger.info(
+                "request_id=%s method=%s route=%s status=%d duration_ms=%.2f",
+                _request_id(request),
+                request.method.upper(),
+                route_template,
+                status_code,
+                duration * 1e3,
+            )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -144,6 +196,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:
         return RedirectResponse(url="/ui/index.html")
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics() -> Response:
+        return Response(
+            content=container.observability_service.render_metrics(),
+            media_type=container.observability_service.METRICS_CONTENT_TYPE,
+        )
 
     return app
 

@@ -145,6 +145,26 @@ class ApiErrorEventORM(Base):
     )
 
 
+class JobRunORM(Base):
+    __tablename__ = "job_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_type = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False, default="pending")
+    requested_by = Column(String(64), nullable=False)
+    payload_json = Column(Text, nullable=False)
+    result_json = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_job_runs_status_submitted", "status", "submitted_at"),
+        Index("ix_job_runs_type_submitted", "job_type", "submitted_at"),
+    )
+
+
 class AuthUserORM(Base):
     __tablename__ = "auth_users"
 

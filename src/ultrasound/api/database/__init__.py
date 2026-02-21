@@ -1,5 +1,6 @@
 """Database infrastructure for SQLAlchemy ORM access."""
 
+from .migrations import upgrade_to_head
 from .models import (
     ApiErrorEventORM,
     AuthTokenORM,
@@ -8,6 +9,7 @@ from .models import (
     BusiTrainingRunORM,
     DatasetMetaORM,
     IndustrialSampleORM,
+    JobRunORM,
     NdtDefectORM,
     NdtSampleORM,
 )
@@ -23,6 +25,8 @@ __all__ = [
     "DatabaseSessionManager",
     "DatasetMetaORM",
     "IndustrialSampleORM",
+    "JobRunORM",
     "NdtDefectORM",
     "NdtSampleORM",
+    "upgrade_to_head",
 ]

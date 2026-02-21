@@ -36,7 +36,7 @@
 <section class="panel" ng-if="vm.industrialSummary && !vm.loading">
   <h3>Industrial Dataset Coverage</h3>
   <p class="note">
-    Steel/NEU/Casting datasets are now persisted in SQL and exposed via service endpoints.
+    Steel/NEU/Casting datasets are persisted in SQL and exposed through reusable service endpoints.
   </p>
   <ul class="list compact" ng-if="vm.industrialSummary.totals_by_dataset">
     <li ng-repeat="(datasetName, total) in vm.industrialSummary.totals_by_dataset">
@@ -99,8 +99,10 @@
 <section class="panel" ng-if="!vm.loading">
   <h3>BUSI Learning Monitor (SQL)</h3>
   <p class="note">
-    Training and evaluation use BUSI images stored in SQLite. The curve below shows train/test accuracy across epochs.
+    Learning runs are queueable background jobs; results are persisted in SQL and rendered as train/test curves.
   </p>
+
+  <p class="note" ng-if="vm.jobNotice">{{ vm.jobNotice }}</p>
 
   <div class="toolbar">
     <label class="inline-field">
@@ -126,7 +128,7 @@
       {{ vm.trainingLoading ? 'Loading...' : 'Refresh Metrics' }}
     </button>
     <button class="btn" type="button" ng-if="vm.canTrain" ng-click="vm.runTraining()" ng-disabled="vm.trainingLoading">
-      {{ vm.trainingLoading ? 'Training...' : 'Run Training' }}
+      {{ vm.trainingLoading ? 'Queueing...' : 'Queue Training Job' }}
     </button>
   </div>
 
@@ -191,6 +193,127 @@
   </div>
 </section>
 
+<section class="panel" ng-if="vm.canTrain && !vm.loading">
+  <h3>Learning Job Queue</h3>
+  <p class="note">Long-running training and ingestion work is executed asynchronously by the background worker.</p>
+  <div class="toolbar">
+    <button class="btn btn-muted" type="button" ng-click="vm.refreshJobs()" ng-disabled="vm.jobsLoading">
+      {{ vm.jobsLoading ? 'Loading Jobs...' : 'Refresh Jobs' }}
+    </button>
+  </div>
+  <p class="note signal-error" ng-if="vm.jobsError">{{ vm.jobsError }}</p>
+  <table class="result-table" ng-if="vm.jobs.length">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Requested By</th>
+        <th>Submitted</th>
+        <th>Finished</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr ng-repeat="job in vm.jobs | limitTo:12">
+        <td>{{ job.job_id }}</td>
+        <td>{{ job.job_type }}</td>
+        <td>{{ job.status }}</td>
+        <td>{{ job.requested_by }}</td>
+        <td>{{ job.submitted_at | date:'shortTime' }}</td>
+        <td>{{ job.finished_at ? (job.finished_at | date:'shortTime') : '-' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note" ng-if="!vm.jobs.length">No jobs submitted yet.</p>
+</section>
+
+<section class="grid-2" ng-if="vm.canTrain && !vm.loading">
+  <div class="panel">
+    <h3>Add New BUSI Data (SQL)</h3>
+    <p class="note">Upload BUSI image/mask pairs directly into SQL-backed dataset storage.</p>
+    <div class="toolbar">
+      <label class="inline-field">
+        Class
+        <select ng-model="vm.busiUpload.class_name">
+          <option value="benign">benign</option>
+          <option value="malignant">malignant</option>
+          <option value="normal">normal</option>
+        </select>
+      </label>
+      <label class="inline-field">
+        Split
+        <select ng-model="vm.busiUpload.split">
+          <option value="train">train</option>
+          <option value="test">test</option>
+        </select>
+      </label>
+    </div>
+    <div class="toolbar">
+      <label class="inline-field">
+        Image
+        <input id="busi-upload-image" type="file" accept="image/*" />
+      </label>
+      <label class="inline-field">
+        Mask (Optional)
+        <input id="busi-upload-mask" type="file" accept="image/*" />
+      </label>
+      <button class="btn" type="button" ng-click="vm.uploadBusiSample()" ng-disabled="vm.busiUploadLoading">
+        {{ vm.busiUploadLoading ? 'Uploading...' : 'Upload BUSI Sample' }}
+      </button>
+    </div>
+    <p class="note signal-error" ng-if="vm.busiUploadError">{{ vm.busiUploadError }}</p>
+    <ul class="list compact" ng-if="vm.busiUploadResult">
+      <li><span>Sample ID</span><strong>{{ vm.busiUploadResult.sample_id }}</strong></li>
+      <li><span>Class</span><strong>{{ vm.busiUploadResult.class_name }}</strong></li>
+      <li><span>Split</span><strong>{{ vm.busiUploadResult.split }}</strong></li>
+      <li><span>Total in Class</span><strong>{{ vm.busiUploadResult.total_class_samples }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3>Add New Industrial Data (SQL)</h3>
+    <p class="note">Upload steel/NEU/casting samples and optional annotations directly to SQL storage.</p>
+    <div class="toolbar">
+      <label class="inline-field">
+        Dataset
+        <select ng-model="vm.industrialUpload.dataset_name">
+          <option value="steel_defect">steel_defect</option>
+          <option value="neu_surface">neu_surface</option>
+          <option value="casting_defect">casting_defect</option>
+        </select>
+      </label>
+      <label class="inline-field">
+        Split
+        <input type="text" ng-model="vm.industrialUpload.split" placeholder="train / validation / test" />
+      </label>
+      <label class="inline-field">
+        Class
+        <input type="text" ng-model="vm.industrialUpload.class_name" placeholder="crazing" />
+      </label>
+    </div>
+    <div class="toolbar">
+      <label class="inline-field">
+        Image
+        <input id="industrial-upload-image" type="file" accept="image/*" />
+      </label>
+      <label class="inline-field">
+        Annotation (Optional)
+        <input id="industrial-upload-annotation" type="file" accept=".xml,.json,.txt" />
+      </label>
+      <button class="btn" type="button" ng-click="vm.uploadIndustrialSample()" ng-disabled="vm.industrialUploadLoading">
+        {{ vm.industrialUploadLoading ? 'Uploading...' : 'Upload Industrial Sample' }}
+      </button>
+    </div>
+    <p class="note signal-error" ng-if="vm.industrialUploadError">{{ vm.industrialUploadError }}</p>
+    <ul class="list compact" ng-if="vm.industrialUploadResult">
+      <li><span>Sample ID</span><strong>{{ vm.industrialUploadResult.sample_id }}</strong></li>
+      <li><span>Dataset</span><strong>{{ vm.industrialUploadResult.dataset_name }}</strong></li>
+      <li><span>Split/Class</span><strong>{{ vm.industrialUploadResult.split }} / {{ vm.industrialUploadResult.class_name }}</strong></li>
+      <li><span>Total in Split+Class</span><strong>{{ vm.industrialUploadResult.total_class_samples }}</strong></li>
+    </ul>
+  </div>
+</section>
+
 <section class="grid-2" ng-if="!vm.loading">
   <div class="panel">
     <h3>Client Error Feed</h3>
@@ -223,15 +346,13 @@
     <h3>Server Error Analytics</h3>
     <div class="toolbar">
       <button class="btn btn-muted" type="button" ng-click="vm.resyncDatasets()" ng-disabled="vm.resyncLoading">
-        {{ vm.resyncLoading ? 'Syncing...' : 'Resync DB From Files' }}
+        {{ vm.resyncLoading ? 'Queueing...' : 'Queue DB Resync Job' }}
       </button>
     </div>
     <p class="note signal-error" ng-if="vm.resyncError">{{ vm.resyncError }}</p>
     <ul class="list compact" ng-if="vm.resyncResult">
-      <li><span>BUSI Rows Synced</span><strong>{{ vm.resyncResult.busi_rows_synced }}</strong></li>
-      <li><span>NDT Rows Synced</span><strong>{{ vm.resyncResult.ndt_rows_synced }}</strong></li>
-      <li><span>Industrial Rows Synced</span><strong>{{ vm.resyncResult.industrial_rows_synced }}</strong></li>
-      <li><span>Synced At</span><strong>{{ vm.resyncResult.generated_at | date:'medium' }}</strong></li>
+      <li><span>Queued Job</span><strong>#{{ vm.resyncResult.job_id }}</strong></li>
+      <li><span>Queued At</span><strong>{{ vm.resyncResult.generated_at | date:'medium' }}</strong></li>
     </ul>
     <p class="note" ng-if="!vm.opsSummary">No server error summary available.</p>
     <div class="metric-grid" ng-if="vm.opsSummary">

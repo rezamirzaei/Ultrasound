@@ -36,6 +36,28 @@
         learning_rate: 0.01,
       };
 
+      vm.jobs = [];
+      vm.jobsLoading = false;
+      vm.jobsError = null;
+      vm.jobNotice = null;
+
+      vm.busiUpload = {
+        class_name: "benign",
+        split: "train",
+      };
+      vm.busiUploadLoading = false;
+      vm.busiUploadError = null;
+      vm.busiUploadResult = null;
+
+      vm.industrialUpload = {
+        dataset_name: "steel_defect",
+        split: "train",
+        class_name: "crazing",
+      };
+      vm.industrialUploadLoading = false;
+      vm.industrialUploadError = null;
+      vm.industrialUploadResult = null;
+
       vm.go = function (path) {
         $location.path(path);
       };
@@ -158,6 +180,24 @@
           });
       };
 
+      vm.refreshJobs = function () {
+        if (!vm.canTrain) {
+          return;
+        }
+        vm.jobsLoading = true;
+        vm.jobsError = null;
+        ApiService.listLearningJobs(20)
+          .then(function (jobs) {
+            vm.jobs = jobs || [];
+          })
+          .catch(function (error) {
+            vm.jobsError = error.detail || "Failed to load learning jobs";
+          })
+          .finally(function () {
+            vm.jobsLoading = false;
+          });
+      };
+
       vm.runTraining = function () {
         if (!vm.canTrain) {
           return;
@@ -165,6 +205,7 @@
 
         vm.trainingLoading = true;
         vm.trainingError = null;
+        vm.jobNotice = null;
 
         var payload = {
           include_normal: !!vm.trainingForm.include_normal,
@@ -173,12 +214,13 @@
           learning_rate: Math.max(0.0001, Number(vm.trainingForm.learning_rate || 0.01)),
         };
 
-        ApiService.runBusiTraining(payload)
-          .then(function (response) {
-            applyTrainingPayload(response);
+        ApiService.enqueueBusiTrainingJob(payload)
+          .then(function (job) {
+            vm.jobNotice = "Queued BUSI training job #" + job.job_id;
+            vm.refreshJobs();
           })
           .catch(function (error) {
-            vm.trainingError = error.detail || "Failed to run BUSI training";
+            vm.trainingError = error.detail || "Failed to queue BUSI training";
           })
           .finally(function () {
             vm.trainingLoading = false;
@@ -193,16 +235,108 @@
         vm.resyncError = null;
         vm.resyncResult = null;
 
-        ApiService.resyncDatasets()
-          .then(function (payload) {
-            vm.resyncResult = payload;
-            load();
+        ApiService.enqueueDatasetResyncJob()
+          .then(function (job) {
+            vm.resyncResult = {
+              generated_at: new Date().toISOString(),
+              busi_rows_synced: 0,
+              ndt_rows_synced: 0,
+              industrial_rows_synced: 0,
+              job_id: job.job_id,
+            };
+            vm.jobNotice = "Queued dataset resync job #" + job.job_id;
+            vm.refreshJobs();
           })
           .catch(function (error) {
-            vm.resyncError = error.detail || "Failed to resync datasets into database";
+            vm.resyncError = error.detail || "Failed to queue dataset resync";
           })
           .finally(function () {
             vm.resyncLoading = false;
+          });
+      };
+
+      vm.uploadBusiSample = function () {
+        if (!vm.canTrain) {
+          return;
+        }
+        vm.busiUploadLoading = true;
+        vm.busiUploadError = null;
+        vm.busiUploadResult = null;
+
+        var imageInput = document.getElementById("busi-upload-image");
+        var maskInput = document.getElementById("busi-upload-mask");
+        if (!imageInput || !imageInput.files || !imageInput.files.length) {
+          vm.busiUploadLoading = false;
+          vm.busiUploadError = "Select an image file before upload.";
+          return;
+        }
+
+        var formData = new FormData();
+        formData.append("class_name", vm.busiUpload.class_name);
+        formData.append("split", vm.busiUpload.split);
+        formData.append("image", imageInput.files[0]);
+        if (maskInput && maskInput.files && maskInput.files.length) {
+          formData.append("mask", maskInput.files[0]);
+        }
+
+        ApiService.uploadBusiSample(formData)
+          .then(function (payload) {
+            vm.busiUploadResult = payload;
+            vm.jobNotice = "BUSI sample uploaded to SQL storage";
+            imageInput.value = "";
+            if (maskInput) {
+              maskInput.value = "";
+            }
+            load();
+          })
+          .catch(function (error) {
+            vm.busiUploadError = error.detail || "BUSI upload failed";
+          })
+          .finally(function () {
+            vm.busiUploadLoading = false;
+          });
+      };
+
+      vm.uploadIndustrialSample = function () {
+        if (!vm.canTrain) {
+          return;
+        }
+        vm.industrialUploadLoading = true;
+        vm.industrialUploadError = null;
+        vm.industrialUploadResult = null;
+
+        var imageInput = document.getElementById("industrial-upload-image");
+        var annotationInput = document.getElementById("industrial-upload-annotation");
+        if (!imageInput || !imageInput.files || !imageInput.files.length) {
+          vm.industrialUploadLoading = false;
+          vm.industrialUploadError = "Select an image file before upload.";
+          return;
+        }
+
+        var formData = new FormData();
+        formData.append("dataset_name", vm.industrialUpload.dataset_name);
+        formData.append("split", vm.industrialUpload.split);
+        formData.append("class_name", vm.industrialUpload.class_name);
+        formData.append("image", imageInput.files[0]);
+        if (annotationInput && annotationInput.files && annotationInput.files.length) {
+          formData.append("annotation", annotationInput.files[0]);
+        }
+
+        ApiService.uploadIndustrialSample(formData)
+          .then(function (payload) {
+            vm.industrialUploadResult = payload;
+            vm.jobNotice = "Industrial sample uploaded to SQL storage";
+            imageInput.value = "";
+            if (annotationInput) {
+              annotationInput.value = "";
+            }
+            load();
+          })
+          .catch(function (error) {
+            vm.industrialUploadError = error.detail || "Industrial upload failed";
+          })
+          .finally(function () {
+            vm.industrialUploadLoading = false;
           });
       };
 
@@ -217,22 +351,34 @@
           ApiService.getIndustrialSummary(),
           ApiService.getBusiTrainingLatest(vm.trainingForm.include_normal),
         ];
-        if (vm.isAdmin) {
+
+        var includeJobs = vm.canTrain;
+        var includeAdmin = vm.isAdmin;
+
+        if (includeJobs) {
+          requests.push(ApiService.listLearningJobs(20));
+        }
+        if (includeAdmin) {
           requests.push(ApiService.getOpsErrorSummary(24 * 60));
           requests.push(ApiService.getOpsErrorRecent(12));
         }
 
         $q.all(requests)
           .then(function (responses) {
-            vm.summary = responses[0];
-            vm.readiness = responses[1];
-            vm.ndtSamples = responses[2].slice(0, 5);
-            vm.industrialSummary = responses[3];
+            var index = 0;
+            vm.summary = responses[index++];
+            vm.readiness = responses[index++];
+            vm.ndtSamples = responses[index++].slice(0, 5);
+            vm.industrialSummary = responses[index++];
             vm.industrialRows = (vm.industrialSummary.rows || []).slice(0, 12);
-            applyTrainingPayload(responses[4]);
-            if (vm.isAdmin) {
-              vm.opsSummary = responses[5];
-              vm.opsRecent = responses[6];
+            applyTrainingPayload(responses[index++]);
+
+            if (includeJobs) {
+              vm.jobs = responses[index++] || [];
+            }
+            if (includeAdmin) {
+              vm.opsSummary = responses[index++];
+              vm.opsRecent = responses[index++];
             }
 
             vm.busiRows = Object.keys(vm.summary.busi_counts || {})
