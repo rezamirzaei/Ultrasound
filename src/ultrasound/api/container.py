@@ -5,6 +5,7 @@ from __future__ import annotations
 from ultrasound.api.config import AppConfig
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
 from ultrasound.api.services.auth_service import AuthService
+from ultrasound.api.services.busi_training_service import BusiTrainingService
 from ultrasound.api.services.dashboard_service import DashboardService
 from ultrasound.api.services.error_analytics_service import ErrorAnalyticsService
 from ultrasound.api.services.media_service import MediaService
@@ -28,6 +29,7 @@ class ApplicationContainer:
             self.media_service,
             self.ndt_detection_service,
         )
+        self.busi_training_service = BusiTrainingService(self.dataset_repository)
         self.preprocessing_service = PreprocessingService(
             self.dataset_repository, self.media_service
         )

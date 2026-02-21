@@ -497,6 +497,56 @@ def test_busi_sample_preview_endpoint(client: TestClient) -> None:
     assert 0.0 <= payload["lesion_ratio"] <= 1.0
 
 
+def test_busi_training_endpoints(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+
+    latest_before = client.get("/api/v1/datasets/busi/training/latest", headers=viewer_headers)
+    assert latest_before.status_code == 200
+    latest_before_payload = latest_before.json()
+    assert latest_before_payload["storage"] == "sql"
+    assert latest_before_payload["run_id"] is None
+    assert latest_before_payload["curve"] == []
+
+    forbidden = client.post(
+        "/api/v1/datasets/busi/training/run",
+        json={
+            "include_normal": False,
+            "epochs": 4,
+            "batch_size": 4,
+            "learning_rate": 0.02,
+        },
+        headers=viewer_headers,
+    )
+    assert forbidden.status_code == 403
+
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
+    run_response = client.post(
+        "/api/v1/datasets/busi/training/run",
+        json={
+            "include_normal": False,
+            "epochs": 4,
+            "batch_size": 4,
+            "learning_rate": 0.02,
+        },
+        headers=analyst_headers,
+    )
+    assert run_response.status_code == 200
+    run_payload = run_response.json()
+    assert run_payload["run_id"] is not None
+    assert run_payload["storage"] == "sql"
+    assert run_payload["train_samples"] > 0
+    assert run_payload["test_samples"] > 0
+    assert 0.0 <= run_payload["train_accuracy"] <= 1.0
+    assert 0.0 <= run_payload["test_accuracy"] <= 1.0
+    assert len(run_payload["curve"]) == 4
+
+    latest_after = client.get("/api/v1/datasets/busi/training/latest", headers=viewer_headers)
+    assert latest_after.status_code == 200
+    latest_after_payload = latest_after.json()
+    assert latest_after_payload["run_id"] == run_payload["run_id"]
+    assert latest_after_payload["curve"]
+
+
 def test_preprocessing_preview_endpoint(client: TestClient) -> None:
     analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
     response = client.post(

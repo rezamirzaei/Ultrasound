@@ -10,6 +10,8 @@ from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
 from ultrasound.api.models.schemas import (
     BusiSamplePreview,
+    BusiTrainingRequest,
+    BusiTrainingResponse,
     DashboardSummaryResponse,
     DataReadinessResponse,
     NdtSampleDetail,
@@ -43,6 +45,28 @@ def get_dashboard_readiness(
 def get_busi_counts(container: ApplicationContainer = Depends(get_container)) -> dict[str, int]:
     """Return BUSI class counts."""
     return container.dashboard_service.get_busi_counts()
+
+
+@router.get("/datasets/busi/training/latest", response_model=BusiTrainingResponse)
+def get_latest_busi_training(
+    include_normal: bool = Query(default=False),
+    container: ApplicationContainer = Depends(get_container),
+) -> BusiTrainingResponse:
+    """Return latest BUSI training metrics and learning curve from SQL storage."""
+    return container.busi_training_service.get_latest_run(include_normal=include_normal)
+
+
+@router.post("/datasets/busi/training/run", response_model=BusiTrainingResponse)
+def run_busi_training(
+    request: BusiTrainingRequest,
+    _role: object = Depends(require_role("analyst")),
+    container: ApplicationContainer = Depends(get_container),
+) -> BusiTrainingResponse:
+    """Train a BUSI classifier from SQL-backed samples and persist run metrics."""
+    try:
+        return container.busi_training_service.run_training(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/datasets/busi/samples/{class_name}/{sample_index}", response_model=BusiSamplePreview)

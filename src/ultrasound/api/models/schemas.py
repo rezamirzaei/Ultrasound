@@ -112,6 +112,41 @@ class BusiSamplePreview(BaseModel):
     mask_data_url: str
 
 
+class BusiTrainingRequest(BaseModel):
+    include_normal: bool = False
+    epochs: int = Field(default=12, ge=2, le=100)
+    batch_size: int = Field(default=16, ge=4, le=256)
+    learning_rate: float = Field(default=0.01, gt=0.0, le=1.0)
+
+
+class BusiTrainingCurvePoint(BaseModel):
+    epoch: int = Field(ge=1)
+    train_accuracy: float = Field(ge=0.0, le=1.0)
+    test_accuracy: float = Field(ge=0.0, le=1.0)
+    train_loss: float = Field(ge=0.0)
+    test_loss: float = Field(ge=0.0)
+
+
+class BusiTrainingResponse(BaseModel):
+    run_id: int | None = Field(default=None, ge=1)
+    generated_at: datetime
+    storage: Literal["sql"] = "sql"
+    include_normal: bool = False
+    epochs: int = Field(ge=0)
+    batch_size: int = Field(ge=0)
+    learning_rate: float = Field(ge=0.0)
+    train_samples: int = Field(ge=0)
+    test_samples: int = Field(ge=0)
+    class_counts: Dict[str, int]
+    class_labels: List[str]
+    train_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
+    test_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
+    train_loss: float | None = Field(default=None, ge=0.0)
+    test_loss: float | None = Field(default=None, ge=0.0)
+    curve: List[BusiTrainingCurvePoint] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class PreprocessingRequest(BaseModel):
     class_name: str = Field(default="benign", pattern="^(benign|malignant|normal)$")
     sample_index: int = Field(default=0, ge=0)

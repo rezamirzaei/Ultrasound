@@ -210,6 +210,19 @@
         );
       };
 
+      this.getBusiTrainingLatest = function (includeNormal) {
+        return unwrap(
+          $http.get(
+            baseUrl + "/datasets/busi/training/latest",
+            withAuth({ params: { include_normal: !!includeNormal } })
+          )
+        );
+      };
+
+      this.runBusiTraining = function (payload) {
+        return unwrap($http.post(baseUrl + "/datasets/busi/training/run", payload, withAuth()));
+      };
+
       this.listNdtSamples = function () {
         return unwrap($http.get(baseUrl + "/datasets/ndt/samples", withAuth()));
       };

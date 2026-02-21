@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Dict, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -168,6 +168,57 @@ class BusiSampleRecord(BaseModel):
         if mask.ndim != 2:
             raise ValueError("BUSI mask must be single-channel")
         return mask
+
+
+class BusiTrainingSampleRecord(BaseModel):
+    """One BUSI sample decoded from SQL storage for model training."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    sample_id: int = Field(ge=1)
+    class_name: Literal["benign", "malignant", "normal"]
+    label: int = Field(ge=0, le=2)
+    split: Literal["train", "test"]
+    image_rgb: np.ndarray
+
+    @field_validator("image_rgb", mode="before")
+    @classmethod
+    def parse_training_rgb_image(cls, value: object) -> np.ndarray:
+        image = np.asarray(value, dtype=np.uint8)
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError("BUSI training image must be RGB with shape [H, W, 3]")
+        return image
+
+
+class BusiTrainingCurvePointRecord(BaseModel):
+    """One epoch point for train/test performance curves."""
+
+    epoch: int = Field(ge=1)
+    train_accuracy: float = Field(ge=0.0, le=1.0)
+    test_accuracy: float = Field(ge=0.0, le=1.0)
+    train_loss: float = Field(ge=0.0)
+    test_loss: float = Field(ge=0.0)
+
+
+class BusiTrainingRunRecord(BaseModel):
+    """Persisted BUSI training run summary and learning curve."""
+
+    run_id: int | None = Field(default=None, ge=1)
+    created_at: datetime
+    include_normal: bool = False
+    epochs: int = Field(ge=1, le=200)
+    batch_size: int = Field(ge=1, le=1024)
+    learning_rate: float = Field(gt=0.0, le=1.0)
+    train_samples: int = Field(ge=1)
+    test_samples: int = Field(ge=1)
+    class_counts: Dict[str, int]
+    class_labels: list[str]
+    train_accuracy: float = Field(ge=0.0, le=1.0)
+    test_accuracy: float = Field(ge=0.0, le=1.0)
+    train_loss: float = Field(ge=0.0)
+    test_loss: float = Field(ge=0.0)
+    curve: list[BusiTrainingCurvePointRecord] = Field(default_factory=list)
+    notes: str | None = None
 
 
 class AuthSessionRecord(BaseModel):

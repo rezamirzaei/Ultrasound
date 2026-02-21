@@ -49,6 +49,8 @@ data/neu_surface/
 data/ndt_ground_truth/
 data/phase_retrieval/
 data/ascan_signals/
+data/*.sqlite3
+data/*.db
 
 # Coverage reports
 htmlcov/

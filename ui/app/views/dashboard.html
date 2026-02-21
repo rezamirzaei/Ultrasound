@@ -64,6 +64,101 @@
   </div>
 </section>
 
+<section class="panel" ng-if="!vm.loading">
+  <h3>BUSI Learning Monitor (SQL)</h3>
+  <p class="note">
+    Training and evaluation use BUSI images stored in SQLite. The curve below shows train/test accuracy across epochs.
+  </p>
+
+  <div class="toolbar">
+    <label class="inline-field">
+      Include Normal
+      <select ng-model="vm.trainingForm.include_normal" ng-disabled="vm.trainingLoading">
+        <option ng-value="false">No (Benign vs Malignant)</option>
+        <option ng-value="true">Yes (3-class)</option>
+      </select>
+    </label>
+    <label class="inline-field">
+      Epochs
+      <input type="number" min="2" max="100" ng-model="vm.trainingForm.epochs" ng-disabled="vm.trainingLoading || !vm.canTrain" />
+    </label>
+    <label class="inline-field">
+      Batch Size
+      <input type="number" min="4" max="256" ng-model="vm.trainingForm.batch_size" ng-disabled="vm.trainingLoading || !vm.canTrain" />
+    </label>
+    <label class="inline-field">
+      Learning Rate
+      <input type="number" min="0.0001" max="1" step="0.0001" ng-model="vm.trainingForm.learning_rate" ng-disabled="vm.trainingLoading || !vm.canTrain" />
+    </label>
+    <button class="btn btn-muted" type="button" ng-click="vm.refreshTraining()" ng-disabled="vm.trainingLoading">
+      {{ vm.trainingLoading ? 'Loading...' : 'Refresh Metrics' }}
+    </button>
+    <button class="btn" type="button" ng-if="vm.canTrain" ng-click="vm.runTraining()" ng-disabled="vm.trainingLoading">
+      {{ vm.trainingLoading ? 'Training...' : 'Run Training' }}
+    </button>
+  </div>
+
+  <p class="note signal-error" ng-if="vm.trainingError">{{ vm.trainingError }}</p>
+
+  <div class="metric-grid metric-grid-4" ng-if="vm.training">
+    <metric-tile label="Storage" value="vm.training.storage | uppercase" tone="muted"></metric-tile>
+    <metric-tile label="Train Accuracy" value="vm.formatPct(vm.training.train_accuracy)" tone="accent"></metric-tile>
+    <metric-tile label="Test Accuracy" value="vm.formatPct(vm.training.test_accuracy)" tone="accent"></metric-tile>
+    <metric-tile label="Run ID" value="vm.training.run_id || 'n/a'" tone="muted"></metric-tile>
+    <metric-tile label="Train Samples" value="vm.training.train_samples"></metric-tile>
+    <metric-tile label="Test Samples" value="vm.training.test_samples"></metric-tile>
+    <metric-tile label="Epochs" value="vm.training.epochs"></metric-tile>
+    <metric-tile label="Learning Rate" value="vm.training.learning_rate"></metric-tile>
+  </div>
+
+  <p class="note" ng-if="vm.training && vm.training.notes">{{ vm.training.notes }}</p>
+
+  <div class="signal-card" ng-if="vm.trainingChart">
+    <svg class="signal-chart busi-curve-chart" viewBox="0 0 {{ vm.trainingChart.width }} {{ vm.trainingChart.height }}" preserveAspectRatio="none">
+      <line
+        ng-repeat="grid in vm.trainingChart.yGrid"
+        x1="40"
+        y1="{{ grid.y }}"
+        x2="{{ vm.trainingChart.width - 16 }}"
+        y2="{{ grid.y }}"
+        class="signal-baseline"
+      ></line>
+      <text ng-repeat="grid in vm.trainingChart.yGrid" x="4" y="{{ grid.y + 4 }}" class="signal-marker-label">
+        {{ grid.label }}
+      </text>
+
+      <path d="{{ vm.trainingChart.trainPath }}" class="busi-train-line"></path>
+      <path d="{{ vm.trainingChart.testPath }}" class="busi-test-line"></path>
+
+      <circle
+        ng-repeat="point in vm.trainingChart.trainPoints"
+        cx="{{ point.x }}"
+        cy="{{ point.y }}"
+        r="2.5"
+        class="busi-train-point"
+      ></circle>
+      <circle
+        ng-repeat="point in vm.trainingChart.testPoints"
+        cx="{{ point.x }}"
+        cy="{{ point.y }}"
+        r="2.5"
+        class="busi-test-point"
+      ></circle>
+
+      <text x="40" y="{{ vm.trainingChart.height - 8 }}" class="signal-wall-marker-label">
+        Epoch {{ vm.trainingChart.startEpoch }}
+      </text>
+      <text x="{{ vm.trainingChart.width - 78 }}" y="{{ vm.trainingChart.height - 8 }}" class="signal-wall-marker-label">
+        Epoch {{ vm.trainingChart.endEpoch }}
+      </text>
+    </svg>
+    <div class="toolbar busi-curve-legend">
+      <span><i class="legend-swatch train"></i> Train Accuracy</span>
+      <span><i class="legend-swatch test"></i> Test Accuracy</span>
+    </div>
+  </div>
+</section>
+
 <section class="grid-2" ng-if="!vm.loading">
   <div class="panel">
     <h3>Client Error Feed</h3>

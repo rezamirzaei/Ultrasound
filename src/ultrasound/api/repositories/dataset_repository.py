@@ -1,62 +1,52 @@
-"""Repository layer for filesystem-backed dataset access."""
+"""Repository layer for SQL-backed BUSI and filesystem-backed NDT access."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import numpy as np
-from PIL import Image
 
 from ultrasound.api.config import AppConfig
-from ultrasound.api.models.domain import BusiSampleRecord, NdtDefectRecord, NdtSampleRecord
+from ultrasound.api.models.domain import (
+    BusiSampleRecord,
+    BusiTrainingRunRecord,
+    BusiTrainingSampleRecord,
+    NdtDefectRecord,
+    NdtSampleRecord,
+)
+from ultrasound.api.repositories.busi_sql_repository import BusiSqlRepository
 
 
 class DatasetRepository:
-    """Encapsulates raw dataset access and metadata extraction."""
+    """Encapsulates dataset access and metadata extraction."""
 
     CLASSES = ("benign", "malignant", "normal")
 
     def __init__(self, config: AppConfig):
         self.config = config
+        self.busi_sql_repository = BusiSqlRepository(
+            db_path=self.config.data_dir / "inphase.sqlite3",
+            busi_dir=self.config.busi_dir,
+        )
 
     def get_busi_counts(self) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        for class_name in self.CLASSES:
-            class_dir = self.config.busi_dir / class_name
-            if not class_dir.exists():
-                counts[class_name] = 0
-                continue
-            counts[class_name] = len([p for p in class_dir.glob("*.png") if "_mask" not in p.stem])
-        return counts
+        return self.busi_sql_repository.get_busi_counts()
 
     def get_busi_sample(self, class_name: str, index: int = 0) -> BusiSampleRecord:
-        class_dir = self.config.busi_dir / class_name
-        if not class_dir.exists():
-            raise FileNotFoundError(f"BUSI class directory not found: {class_dir}")
+        return self.busi_sql_repository.get_busi_sample(class_name=class_name, index=index)
 
-        images = sorted(p for p in class_dir.glob("*.png") if "_mask" not in p.stem)
-        if not images:
-            raise FileNotFoundError(f"No BUSI images found in {class_dir}")
+    def list_busi_training_samples(
+        self, include_normal: bool = False
+    ) -> list[BusiTrainingSampleRecord]:
+        return self.busi_sql_repository.list_busi_training_samples(include_normal=include_normal)
 
-        resolved_index = int(index % len(images))
-        image_path = images[resolved_index]
-        mask_candidates = sorted(class_dir.glob(f"{image_path.stem}_mask*.png"))
+    def save_busi_training_run(self, run: BusiTrainingRunRecord) -> BusiTrainingRunRecord:
+        return self.busi_sql_repository.save_busi_training_run(run)
 
-        image = np.asarray(Image.open(image_path).convert("RGB"), dtype=np.uint8)
-        if mask_candidates:
-            mask = np.asarray(Image.open(mask_candidates[0]).convert("L"), dtype=np.uint8)
-        else:
-            mask = np.zeros(image.shape[:2], dtype=np.uint8)
-
-        return BusiSampleRecord(
-            class_name=class_name,
-            requested_index=index,
-            resolved_index=resolved_index,
-            total_samples=len(images),
-            image_path=image_path,
-            image_rgb=image,
-            mask=mask,
-        )
+    def get_latest_busi_training_run(
+        self, include_normal: bool = False
+    ) -> BusiTrainingRunRecord | None:
+        return self.busi_sql_repository.get_latest_busi_training_run(include_normal=include_normal)
 
     def list_ndt_samples(self) -> list[str]:
         if not self.config.ndt_dir.exists():

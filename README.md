@@ -134,6 +134,7 @@ Default sign-in accounts (change with `INPHASE_*_PASSWORD` env vars):
 UI modules:
 - Dashboard: project summary + quick navigation
 - BUSI Explorer: browse images/masks by class and sample index
+- BUSI Learning Monitor: run SQL-backed training and inspect train/test accuracy curves
 - Preprocessing Lab: run Lee/Frost/CLAHE/ADMM-TV and compare metrics
 - NDT Explorer: inspect sample metadata, fused defect detections, and sampled RF waveforms
 
@@ -141,10 +142,14 @@ Key API endpoints used by the UI:
 - `GET /api/v1/dashboard/summary`
 - `GET /api/v1/dashboard/readiness`
 - `GET /api/v1/datasets/busi/samples/{class_name}/{sample_index}`
+- `GET /api/v1/datasets/busi/training/latest?include_normal=false`
+- `POST /api/v1/datasets/busi/training/run`
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
 - `POST /api/v1/preprocessing/preview`
 
 Validation & reliability:
+- BUSI image/mask data is synchronized into SQLite (`data/inphase.sqlite3`) and served from SQL.
+- BUSI learning service trains from SQL-stored samples and persists run metrics + epoch curves.
 - Repository outputs are normalized into typed Pydantic domain objects before entering services.
 - API responses are strict Pydantic models (no NaN payload leaks to clients).
 - NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.
