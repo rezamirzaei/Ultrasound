@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -73,6 +73,8 @@ class NdtWallMarker(BaseModel):
     depth_mm: float | None = Field(default=None, ge=0)
     amplitude: float | None = None
     two_way_time_us: float = Field(ge=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    time_std_us: float | None = Field(default=None, ge=0)
 
 
 class NdtSignalPreview(BaseModel):
@@ -85,6 +87,13 @@ class NdtSignalPreview(BaseModel):
     total_peaks: int = Field(ge=0)
     wall_markers: List[NdtWallMarker] = Field(default_factory=list)
     estimated_thickness_mm: float | None = Field(default=None, ge=0)
+    thickness_std_mm: float | None = Field(default=None, ge=0)
+    thickness_ci95_lower_mm: float | None = Field(default=None, ge=0)
+    thickness_ci95_upper_mm: float | None = Field(default=None, ge=0)
+    thickness_confidence: float | None = Field(default=None, ge=0, le=1)
+    thickness_method: Literal["time_of_flight", "absolute_backwall", "insufficient_data"] = (
+        "insufficient_data"
+    )
     nominal_thickness_mm: float | None = Field(default=None, ge=0)
     thickness_error_mm: float | None = None
     thinning_flag: bool = False
@@ -135,3 +144,45 @@ class PreprocessingPreviewResponse(BaseModel):
 
 class ApiError(BaseModel):
     detail: str
+    request_id: str | None = None
+    status_code: int | None = Field(default=None, ge=100, le=599)
+    code: str | None = None
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=2, max_length=64)
+    password: str = Field(min_length=4, max_length=128)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "Bearer"
+    username: str
+    role: Literal["viewer", "analyst", "admin"]
+    expires_at: datetime
+
+
+class AuthMeResponse(BaseModel):
+    username: str
+    role: Literal["viewer", "analyst", "admin"]
+    expires_at: datetime
+
+
+class OpsErrorEvent(BaseModel):
+    occurred_at: datetime
+    request_id: str
+    method: str
+    path: str
+    status_code: int = Field(ge=100, le=599)
+    detail: str
+    role: Literal["viewer", "analyst", "admin"] | None = None
+
+
+class OpsErrorSummaryResponse(BaseModel):
+    generated_at: datetime
+    window_minutes: int = Field(ge=1)
+    total_error_count: int = Field(ge=0)
+    recent_error_count: int = Field(ge=0)
+    by_status: Dict[str, int]
+    by_path: Dict[str, int]
+    last_error_at: datetime | None = None

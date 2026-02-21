@@ -2,10 +2,13 @@
 
 from .schemas import (
     ApiError,
+    AuthMeResponse,
     BusiSamplePreview,
     DashboardSummaryResponse,
     DataReadinessResponse,
     HealthResponse,
+    LoginRequest,
+    LoginResponse,
     MethodMetrics,
     MethodPreview,
     NdtDefect,
@@ -14,16 +17,21 @@ from .schemas import (
     NdtSignalPreview,
     NdtSignalStats,
     NdtWallMarker,
+    OpsErrorEvent,
+    OpsErrorSummaryResponse,
     PreprocessingPreviewResponse,
     PreprocessingRequest,
 )
 
 __all__ = [
     "ApiError",
+    "AuthMeResponse",
     "BusiSamplePreview",
     "DataReadinessResponse",
     "DashboardSummaryResponse",
     "HealthResponse",
+    "LoginRequest",
+    "LoginResponse",
     "MethodMetrics",
     "MethodPreview",
     "NdtDefect",
@@ -32,6 +40,8 @@ __all__ = [
     "NdtSignalPreview",
     "NdtSignalStats",
     "NdtWallMarker",
+    "OpsErrorEvent",
+    "OpsErrorSummaryResponse",
     "PreprocessingPreviewResponse",
     "PreprocessingRequest",
 ]

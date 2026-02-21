@@ -5,10 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from ultrasound.api.container import ApplicationContainer
-from ultrasound.api.controllers.dependencies import get_container
+from ultrasound.api.controllers.dependencies import get_container, require_role
 from ultrasound.api.models.schemas import PreprocessingPreviewResponse, PreprocessingRequest
 
-router = APIRouter(tags=["preprocessing"])
+router = APIRouter(
+    tags=["preprocessing"],
+    dependencies=[Depends(require_role("analyst"))],
+)
 
 
 @router.post("/preprocessing/preview", response_model=PreprocessingPreviewResponse)

@@ -101,6 +101,8 @@
         var wallMarkers = (signal.wall_markers || []).map(function (marker) {
           var depthStr = marker.depth_mm != null ? marker.depth_mm.toFixed(2) + " mm | " : "";
           var ampStr = marker.amplitude != null ? " | A=" + marker.amplitude.toFixed(3) : "";
+          var confStr = marker.confidence != null ? " | conf=" + marker.confidence.toFixed(2) : "";
+          var stdStr = marker.time_std_us != null ? " | \u03c3t=" + marker.time_std_us.toFixed(3) + " \u00b5s" : "";
           return {
             x: toX(marker.two_way_time_us),
             label:
@@ -110,7 +112,9 @@
               "t=" +
               marker.two_way_time_us.toFixed(3) +
               " \u00b5s" +
-              ampStr,
+              ampStr +
+              confStr +
+              stdStr,
           };
         });
 

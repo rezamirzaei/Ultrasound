@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -62,6 +63,8 @@ class NdtWallEchoRecord(BaseModel):
     time_us: float = Field(ge=0.0)
     depth_m: float | None = Field(default=None, ge=0.0)
     amplitude: float | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    time_std_us: float | None = Field(default=None, ge=0.0)
 
     @field_validator("amplitude", mode="before")
     @classmethod
@@ -78,6 +81,13 @@ class NdtSignalAnalysisRecord(BaseModel):
     front_wall: NdtWallEchoRecord | None = None
     back_wall: NdtWallEchoRecord | None = None
     estimated_thickness_mm: float | None = Field(default=None, ge=0.0)
+    thickness_std_mm: float | None = Field(default=None, ge=0.0)
+    thickness_ci95_lower_mm: float | None = Field(default=None, ge=0.0)
+    thickness_ci95_upper_mm: float | None = Field(default=None, ge=0.0)
+    thickness_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    thickness_method: Literal["time_of_flight", "absolute_backwall", "insufficient_data"] = (
+        "insufficient_data"
+    )
     nominal_thickness_mm: float | None = Field(default=None, ge=0.0)
     thickness_error_mm: float | None = None
     thinning_flag: bool = False
@@ -158,3 +168,23 @@ class BusiSampleRecord(BaseModel):
         if mask.ndim != 2:
             raise ValueError("BUSI mask must be single-channel")
         return mask
+
+
+class AuthSessionRecord(BaseModel):
+    """Authenticated API user context."""
+
+    username: str
+    role: Literal["viewer", "analyst", "admin"]
+    expires_at: datetime
+
+
+class ApiErrorEventRecord(BaseModel):
+    """Captured API error event used by analytics service."""
+
+    occurred_at: datetime
+    request_id: str
+    method: str
+    path: str
+    status_code: int = Field(ge=100, le=599)
+    detail: str
+    role: Literal["viewer", "analyst", "admin"] | None = None

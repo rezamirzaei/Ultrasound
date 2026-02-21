@@ -70,6 +70,20 @@ def client(tmp_path: Path) -> TestClient:
     return TestClient(app)
 
 
+def _auth_headers(
+    client: TestClient,
+    username: str = "viewer",
+    password: str = "viewer123",
+) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_health_endpoint(client: TestClient) -> None:
     response = client.get("/api/v1/health")
 
@@ -93,8 +107,37 @@ def test_ui_index_served(client: TestClient) -> None:
     assert "inPhase Ultrasound Platform" in response.text
 
 
-def test_dashboard_summary_endpoint(client: TestClient) -> None:
+def test_auth_login_and_me_endpoint(client: TestClient) -> None:
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "viewer", "password": "viewer123"},
+    )
+    assert login_response.status_code == 200
+    payload = login_response.json()
+    assert payload["token_type"] == "Bearer"
+    assert payload["role"] == "viewer"
+    assert payload["access_token"]
+
+    me_response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {payload['access_token']}"},
+    )
+    assert me_response.status_code == 200
+    me_payload = me_response.json()
+    assert me_payload["username"] == "viewer"
+    assert me_payload["role"] == "viewer"
+
+
+def test_protected_endpoint_requires_authentication(client: TestClient) -> None:
     response = client.get("/api/v1/dashboard/summary")
+    assert response.status_code == 401
+    payload = response.json()
+    assert "detail" in payload
+    assert "request_id" in payload
+
+
+def test_dashboard_summary_endpoint(client: TestClient) -> None:
+    response = client.get("/api/v1/dashboard/summary", headers=_auth_headers(client))
 
     assert response.status_code == 200
     payload = response.json()
@@ -104,7 +147,7 @@ def test_dashboard_summary_endpoint(client: TestClient) -> None:
 
 
 def test_dashboard_readiness_endpoint(client: TestClient) -> None:
-    response = client.get("/api/v1/dashboard/readiness")
+    response = client.get("/api/v1/dashboard/readiness", headers=_auth_headers(client))
 
     assert response.status_code == 200
     payload = response.json()
@@ -116,14 +159,17 @@ def test_dashboard_readiness_endpoint(client: TestClient) -> None:
 
 
 def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
-    list_response = client.get("/api/v1/datasets/ndt/samples")
+    headers = _auth_headers(client)
+    list_response = client.get("/api/v1/datasets/ndt/samples", headers=headers)
 
     assert list_response.status_code == 200
     samples = list_response.json()
     assert isinstance(samples, list)
     assert len(samples) > 0
 
-    detail_response = client.get(f"/api/v1/datasets/ndt/samples/{samples[0]['name']}")
+    detail_response = client.get(
+        f"/api/v1/datasets/ndt/samples/{samples[0]['name']}", headers=headers
+    )
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["name"] == samples[0]["name"]
@@ -144,6 +190,7 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     signal_response = client.get(
         f"/api/v1/datasets/ndt/samples/{samples[0]['name']}/signal",
         params={"max_points": 256},
+        headers=headers,
     )
     assert signal_response.status_code == 200
     signal = signal_response.json()
@@ -155,8 +202,21 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     assert signal["total_peaks"] >= 0
     assert isinstance(signal["thinning_flag"], bool)
     assert isinstance(signal["wall_markers"], list)
+    assert signal["thickness_method"] in {
+        "time_of_flight",
+        "absolute_backwall",
+        "insufficient_data",
+    }
     if signal["estimated_thickness_mm"] is not None:
         assert signal["estimated_thickness_mm"] >= 0.0
+    if signal["thickness_std_mm"] is not None:
+        assert signal["thickness_std_mm"] >= 0.0
+    if signal["thickness_ci95_lower_mm"] is not None:
+        assert signal["thickness_ci95_lower_mm"] >= 0.0
+    if signal["thickness_ci95_upper_mm"] is not None:
+        assert signal["thickness_ci95_upper_mm"] >= signal["thickness_ci95_lower_mm"]
+    if signal["thickness_confidence"] is not None:
+        assert 0.0 <= signal["thickness_confidence"] <= 1.0
     if signal["nominal_thickness_mm"] is not None:
         assert signal["nominal_thickness_mm"] >= 0.0
 
@@ -172,6 +232,10 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
         assert wall["label"] in {"front_wall", "back_wall"}
         assert wall["two_way_time_us"] >= 0
         assert wall["amplitude"] is None or isinstance(wall["amplitude"], float)
+        if wall["confidence"] is not None:
+            assert 0.0 <= wall["confidence"] <= 1.0
+        if wall["time_std_us"] is not None:
+            assert wall["time_std_us"] >= 0.0
         if wall["depth_mm"] is not None:
             assert wall["depth_mm"] >= 0
 
@@ -238,7 +302,10 @@ def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
     app = create_app(config=config)
     test_client = TestClient(app)
 
-    detail = test_client.get("/api/v1/datasets/ndt/samples/tuple_defects.npz").json()
+    headers = _auth_headers(test_client)
+    detail = test_client.get(
+        "/api/v1/datasets/ndt/samples/tuple_defects.npz", headers=headers
+    ).json()
     assert detail["n_defects"] == 2
     depths = sorted(
         float(item["depth_m"]) for item in detail["defects"] if item["depth_m"] is not None
@@ -250,6 +317,7 @@ def test_ndt_defect_parsing_with_tuple_format(tmp_path: Path) -> None:
     signal = test_client.get(
         "/api/v1/datasets/ndt/samples/tuple_defects.npz/signal",
         params={"max_points": 256},
+        headers=headers,
     ).json()
     assert signal["total_peaks"] >= 2
     assert signal["thinning_flag"] is False
@@ -322,7 +390,10 @@ def test_ndt_signal_detection_when_metadata_is_empty(tmp_path: Path) -> None:
     app = create_app(config=config)
     test_client = TestClient(app)
 
-    detail = test_client.get("/api/v1/datasets/ndt/samples/signal_only_defect.npz").json()
+    headers = _auth_headers(test_client)
+    detail = test_client.get(
+        "/api/v1/datasets/ndt/samples/signal_only_defect.npz", headers=headers
+    ).json()
     assert detail["n_defects"] >= 1
     signal_like = [item for item in detail["defects"] if item["source"] in {"signal", "fused"}]
     assert signal_like
@@ -332,6 +403,7 @@ def test_ndt_signal_detection_when_metadata_is_empty(tmp_path: Path) -> None:
     signal = test_client.get(
         "/api/v1/datasets/ndt/samples/signal_only_defect.npz/signal",
         params={"max_points": 512},
+        headers=headers,
     ).json()
     assert signal["total_peaks"] >= 3
     assert signal["thinning_flag"] is False
@@ -399,9 +471,11 @@ def test_ndt_thinning_flag_and_thickness_estimation(tmp_path: Path) -> None:
     app = create_app(config=config)
     test_client = TestClient(app)
 
+    headers = _auth_headers(test_client)
     signal = test_client.get(
         "/api/v1/datasets/ndt/samples/corrosion_like.npz/signal",
         params={"max_points": 512},
+        headers=headers,
     ).json()
 
     assert signal["total_peaks"] >= 2
@@ -411,7 +485,7 @@ def test_ndt_thinning_flag_and_thickness_estimation(tmp_path: Path) -> None:
 
 
 def test_busi_sample_preview_endpoint(client: TestClient) -> None:
-    response = client.get("/api/v1/datasets/busi/samples/benign/0")
+    response = client.get("/api/v1/datasets/busi/samples/benign/0", headers=_auth_headers(client))
 
     assert response.status_code == 200
     payload = response.json()
@@ -424,6 +498,7 @@ def test_busi_sample_preview_endpoint(client: TestClient) -> None:
 
 
 def test_preprocessing_preview_endpoint(client: TestClient) -> None:
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
     response = client.post(
         "/api/v1/preprocessing/preview",
         json={
@@ -434,6 +509,7 @@ def test_preprocessing_preview_endpoint(client: TestClient) -> None:
             "n_iter": 8,
             "clip_limit": 2.0,
         },
+        headers=analyst_headers,
     )
 
     assert response.status_code == 200
@@ -441,3 +517,46 @@ def test_preprocessing_preview_endpoint(client: TestClient) -> None:
     assert payload["recommendation"]
     assert payload["original_image_data_url"].startswith("data:image/png;base64,")
     assert len(payload["methods"]) == 4
+
+
+def test_role_restriction_for_preprocessing(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+    response = client.post(
+        "/api/v1/preprocessing/preview",
+        json={
+            "class_name": "benign",
+            "sample_index": 0,
+            "lambda_tv": 0.04,
+            "rho": 1.0,
+            "n_iter": 8,
+            "clip_limit": 2.0,
+        },
+        headers=viewer_headers,
+    )
+    assert response.status_code == 403
+    assert "Role 'analyst'" in response.json()["detail"]
+
+
+def test_ops_error_analytics_admin_only(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+    admin_headers = _auth_headers(client, username="admin", password="admin123")
+
+    forbidden = client.get("/api/v1/ops/errors/summary", headers=viewer_headers)
+    assert forbidden.status_code == 403
+
+    # Generate one controlled client-side error event to populate analytics.
+    missing = client.get("/api/v1/datasets/ndt/samples/missing_sample.npz", headers=viewer_headers)
+    assert missing.status_code == 404
+
+    summary = client.get("/api/v1/ops/errors/summary", headers=admin_headers)
+    assert summary.status_code == 200
+    summary_payload = summary.json()
+    assert summary_payload["total_error_count"] >= 1
+    assert isinstance(summary_payload["by_status"], dict)
+
+    recent = client.get("/api/v1/ops/errors/recent", headers=admin_headers)
+    assert recent.status_code == 200
+    recent_payload = recent.json()
+    assert isinstance(recent_payload, list)
+    assert len(recent_payload) >= 1
+    assert "request_id" in recent_payload[0]

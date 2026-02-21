@@ -126,6 +126,11 @@ Then open:
 - API docs: `http://localhost:8000/docs`
 - API health: `http://localhost:8000/api/v1/health`
 
+Default sign-in accounts (change with `INPHASE_*_PASSWORD` env vars):
+- `viewer / viewer123` (read-only dashboards + explorers)
+- `analyst / analyst123` (includes preprocessing workflows)
+- `admin / admin123` (includes operational error analytics)
+
 UI modules:
 - Dashboard: project summary + quick navigation
 - BUSI Explorer: browse images/masks by class and sample index
@@ -144,13 +149,21 @@ Validation & reliability:
 - API responses are strict Pydantic models (no NaN payload leaks to clients).
 - NDT UI loads metadata and waveform independently, so waveform errors no longer break sample details.
 - NDT defects are fused from metadata + waveform analysis (Hilbert envelope + adaptive peak detection).
-- NDT signal endpoint now exposes wall markers, total peaks, thickness estimate/error, and thinning flag.
+- NDT signal endpoint exposes wall markers, total peaks, robust thickness method selection, confidence score, and CI95 uncertainty bounds.
 - UI dependencies are vendored locally under `ui/vendor/` so sidebar routing works without external CDNs.
+- API emits request IDs and captures operational error analytics under admin-only `/api/v1/ops/errors/*` endpoints.
 
 Run tests in Docker explicitly:
 
 ```bash
 docker compose --profile test run --rm test
+```
+
+Run browser E2E checks:
+
+```bash
+python -m playwright install chromium
+make e2e
 ```
 
 ### Developer Commands
@@ -167,6 +180,7 @@ docker compose --profile test run --rm test
 | `make api` | Start REST API + UI server |
 | `make clean` | Remove build artifacts |
 | `make docker-test` | Run tests inside Docker |
+| `make e2e` | Run Playwright browser E2E tests |
 
 ---
 

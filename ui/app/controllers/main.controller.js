@@ -11,9 +11,54 @@
       vm.apiBase = ApiService.getBaseUrl();
       vm.pageTitle = "Dashboard";
       vm.apiHealthy = false;
+      vm.authenticated = ApiService.isAuthenticated();
+      vm.authError = null;
+      vm.authLoading = false;
+      vm.currentUser = ApiService.getAuthSession();
+      vm.loginForm = {
+        username: "viewer",
+        password: "viewer123",
+      };
 
       vm.isActive = function (path) {
         return $location.path() === path;
+      };
+
+      vm.canAccess = function (role) {
+        return ApiService.hasRole(role);
+      };
+
+      vm.login = function () {
+        vm.authLoading = true;
+        vm.authError = null;
+
+        ApiService.login(vm.loginForm.username, vm.loginForm.password)
+          .then(function () {
+            return ApiService.me();
+          })
+          .then(function (profile) {
+            vm.currentUser = profile;
+            vm.authenticated = true;
+            if (!$location.path()) {
+              $location.path("/dashboard");
+            }
+          })
+          .catch(function (error) {
+            vm.authenticated = false;
+            vm.currentUser = null;
+            vm.authError = error.detail || "Login failed";
+          })
+          .finally(function () {
+            vm.authLoading = false;
+          });
+      };
+
+      vm.logout = function () {
+        ApiService.logout();
+        vm.authenticated = false;
+        vm.currentUser = null;
+        vm.authError = null;
+        $location.path("/dashboard");
       };
 
       var pageMap = {
@@ -27,13 +72,38 @@
         vm.pageTitle = pageMap[$location.path()] || "Ultrasound Platform";
       });
 
-      ApiService.health()
-        .then(function () {
-          vm.apiHealthy = true;
-        })
-        .catch(function () {
-          vm.apiHealthy = false;
-        });
+      $rootScope.$on("auth:expired", function () {
+        vm.authenticated = false;
+        vm.currentUser = null;
+        vm.authError = "Session expired. Please sign in again.";
+      });
+
+      function init() {
+        ApiService.health()
+          .then(function () {
+            vm.apiHealthy = true;
+          })
+          .catch(function () {
+            vm.apiHealthy = false;
+          });
+
+        if (!vm.authenticated) {
+          return;
+        }
+
+        ApiService.me()
+          .then(function (profile) {
+            vm.currentUser = profile;
+            vm.authenticated = true;
+          })
+          .catch(function (error) {
+            vm.authenticated = false;
+            vm.currentUser = null;
+            vm.authError = error.detail || "Authentication required";
+          });
+      }
+
+      init();
     },
   ]);
 })();

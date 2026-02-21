@@ -63,3 +63,62 @@
     <button class="btn btn-muted" ng-click="vm.go('/ndt')">Open NDT Explorer</button>
   </div>
 </section>
+
+<section class="grid-2" ng-if="!vm.loading">
+  <div class="panel">
+    <h3>Client Error Feed</h3>
+    <p class="note" ng-if="!vm.clientErrors.length">No recent client-side API errors.</p>
+    <table class="result-table" ng-if="vm.clientErrors.length">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Status</th>
+          <th>Path</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="event in vm.clientErrors | limitTo:8">
+          <td>{{ event.occurred_at | date:'shortTime' }}</td>
+          <td>{{ event.status_code }}</td>
+          <td>{{ event.path }}</td>
+          <td>{{ event.detail }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="toolbar">
+      <button class="btn btn-muted" type="button" ng-click="vm.refreshClientErrors()">Refresh Feed</button>
+      <button class="btn btn-muted" type="button" ng-click="vm.clearClientErrors()">Clear Feed</button>
+    </div>
+  </div>
+
+  <div class="panel" ng-if="vm.isAdmin">
+    <h3>Server Error Analytics</h3>
+    <p class="note" ng-if="!vm.opsSummary">No server error summary available.</p>
+    <div class="metric-grid" ng-if="vm.opsSummary">
+      <metric-tile label="Window (min)" value="vm.opsSummary.window_minutes" tone="muted"></metric-tile>
+      <metric-tile label="Total Errors" value="vm.opsSummary.total_error_count" tone="accent"></metric-tile>
+      <metric-tile label="Recent Errors" value="vm.opsSummary.recent_error_count" tone="accent"></metric-tile>
+    </div>
+    <table class="result-table" ng-if="vm.opsRecent.length">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Status</th>
+          <th>Path</th>
+          <th>Detail</th>
+          <th>Request ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="event in vm.opsRecent">
+          <td>{{ event.occurred_at | date:'shortTime' }}</td>
+          <td>{{ event.status_code }}</td>
+          <td>{{ event.path }}</td>
+          <td>{{ event.detail }}</td>
+          <td><code>{{ event.request_id }}</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

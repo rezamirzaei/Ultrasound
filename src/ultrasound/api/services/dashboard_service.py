@@ -168,6 +168,8 @@ class DashboardService:
                     depth_mm=0.0,
                     amplitude=signal_analysis.front_wall.amplitude,
                     two_way_time_us=signal_analysis.front_wall.time_us,
+                    confidence=signal_analysis.front_wall.confidence,
+                    time_std_us=signal_analysis.front_wall.time_std_us,
                 )
             )
         if signal_analysis.back_wall is not None:
@@ -181,6 +183,8 @@ class DashboardService:
                     ),
                     amplitude=signal_analysis.back_wall.amplitude,
                     two_way_time_us=signal_analysis.back_wall.time_us,
+                    confidence=signal_analysis.back_wall.confidence,
+                    time_std_us=signal_analysis.back_wall.time_std_us,
                 )
             )
 
@@ -202,6 +206,11 @@ class DashboardService:
             total_peaks=signal_analysis.total_peaks,
             wall_markers=wall_markers,
             estimated_thickness_mm=signal_analysis.estimated_thickness_mm,
+            thickness_std_mm=signal_analysis.thickness_std_mm,
+            thickness_ci95_lower_mm=signal_analysis.thickness_ci95_lower_mm,
+            thickness_ci95_upper_mm=signal_analysis.thickness_ci95_upper_mm,
+            thickness_confidence=signal_analysis.thickness_confidence,
+            thickness_method=signal_analysis.thickness_method,
             nominal_thickness_mm=signal_analysis.nominal_thickness_mm,
             thickness_error_mm=signal_analysis.thickness_error_mm,
             thinning_flag=signal_analysis.thinning_flag,

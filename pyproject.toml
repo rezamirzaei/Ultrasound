@@ -38,6 +38,7 @@ dev = [
     "isort>=5.12.0",
     "mypy>=1.0.0",
     "httpx>=0.27.0",
+    "playwright>=1.49.0",
 ]
 notebooks = [
     "jupyter>=1.0.0",
@@ -85,6 +86,9 @@ ignore_errors = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "e2e: browser end-to-end tests",
+]
 
 [tool.uv]
 # Ensure uv resolves to versions with compatible wheels for all platforms

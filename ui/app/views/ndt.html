@@ -144,6 +144,26 @@
           <strong>{{ vm.signal.estimated_thickness_mm == null ? 'N/A' : (vm.signal.estimated_thickness_mm | number:3) }}</strong>
         </li>
         <li>
+          <span>Thickness Method</span>
+          <strong>{{ vm.signal.thickness_method }}</strong>
+        </li>
+        <li>
+          <span>Thickness Std (mm)</span>
+          <strong>{{ vm.signal.thickness_std_mm == null ? 'N/A' : (vm.signal.thickness_std_mm | number:4) }}</strong>
+        </li>
+        <li>
+          <span>Thickness CI95 (mm)</span>
+          <strong>
+            {{ vm.signal.thickness_ci95_lower_mm == null ? 'N/A' : (vm.signal.thickness_ci95_lower_mm | number:3) }}
+            –
+            {{ vm.signal.thickness_ci95_upper_mm == null ? 'N/A' : (vm.signal.thickness_ci95_upper_mm | number:3) }}
+          </strong>
+        </li>
+        <li>
+          <span>Thickness Confidence</span>
+          <strong>{{ vm.signal.thickness_confidence == null ? 'N/A' : (vm.signal.thickness_confidence | number:2) }}</strong>
+        </li>
+        <li>
           <span>Nominal Thickness (mm)</span>
           <strong>{{ vm.signal.nominal_thickness_mm == null ? 'N/A' : (vm.signal.nominal_thickness_mm | number:3) }}</strong>
         </li>
@@ -167,6 +187,8 @@
             <th>Depth (mm)</th>
             <th>Amplitude</th>
             <th>Time (µs)</th>
+            <th>Confidence</th>
+            <th>Time Std (µs)</th>
           </tr>
         </thead>
         <tbody>
@@ -176,6 +198,8 @@
             <td>{{ wall.depth_mm == null ? 'N/A' : (wall.depth_mm | number:3) }}</td>
             <td>{{ wall.amplitude == null ? 'N/A' : (wall.amplitude | number:3) }}</td>
             <td>{{ wall.two_way_time_us | number:4 }}</td>
+            <td>{{ wall.confidence == null ? 'N/A' : (wall.confidence | number:2) }}</td>
+            <td>{{ wall.time_std_us == null ? 'N/A' : (wall.time_std_us | number:3) }}</td>
           </tr>
         </tbody>
       </table>

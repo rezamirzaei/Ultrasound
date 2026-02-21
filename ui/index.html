@@ -20,11 +20,40 @@
           <h1>inPhase</h1>
           <p>Ultrasound Control Room</p>
         </div>
+        <section class="auth-panel" ng-if="!main.authenticated">
+          <h3>Sign In</h3>
+          <label>
+            Username
+            <input id="login-username" type="text" ng-model="main.loginForm.username" placeholder="viewer" />
+          </label>
+          <label>
+            Password
+            <input id="login-password" type="password" ng-model="main.loginForm.password" placeholder="viewer123" />
+          </label>
+          <button id="login-submit" class="btn" type="button" ng-click="main.login()" ng-disabled="main.authLoading">
+            {{ main.authLoading ? 'Signing In...' : 'Sign In' }}
+          </button>
+          <p class="note auth-hint">Demo users: viewer/viewer123, analyst/analyst123, admin/admin123</p>
+          <p class="note signal-error" ng-if="main.authError">{{ main.authError }}</p>
+        </section>
+
+        <section class="auth-panel authenticated" ng-if="main.authenticated && main.currentUser">
+          <h3>Session</h3>
+          <ul class="list compact">
+            <li><span>User</span><strong>{{ main.currentUser.username }}</strong></li>
+            <li><span>Role</span><strong>{{ main.currentUser.role }}</strong></li>
+            <li><span>Expires</span><strong>{{ main.currentUser.expires_at | date:'short' }}</strong></li>
+          </ul>
+          <button id="logout-submit" class="btn btn-muted" type="button" ng-click="main.logout()">Logout</button>
+        </section>
         <nav>
-          <a ng-class="{active: main.isActive('/dashboard')}" ng-href="#/dashboard">Dashboard</a>
-          <a ng-class="{active: main.isActive('/busi')}" ng-href="#/busi">BUSI Explorer</a>
-          <a ng-class="{active: main.isActive('/preprocessing')}" ng-href="#/preprocessing">Preprocessing Lab</a>
-          <a ng-class="{active: main.isActive('/ndt')}" ng-href="#/ndt">NDT Explorer</a>
+          <a ng-class="{active: main.isActive('/dashboard'), disabled: !main.authenticated}" ng-href="{{ main.authenticated ? '#/dashboard' : '' }}">Dashboard</a>
+          <a ng-class="{active: main.isActive('/busi'), disabled: !main.authenticated}" ng-href="{{ main.authenticated ? '#/busi' : '' }}">BUSI Explorer</a>
+          <a
+            ng-class="{active: main.isActive('/preprocessing'), disabled: !main.canAccess('analyst')}"
+            ng-href="{{ main.canAccess('analyst') ? '#/preprocessing' : '' }}"
+          >Preprocessing Lab</a>
+          <a ng-class="{active: main.isActive('/ndt'), disabled: !main.authenticated}" ng-href="{{ main.authenticated ? '#/ndt' : '' }}">NDT Explorer</a>
         </nav>
         <div class="sidebar-footer">
           <span>REST API</span>
@@ -37,7 +66,11 @@
           <h2>{{ main.pageTitle }}</h2>
           <div class="status-dot" ng-class="{ok: main.apiHealthy, bad: !main.apiHealthy}"></div>
         </header>
-        <section ng-view class="view"></section>
+        <section ng-view class="view" ng-if="main.authenticated"></section>
+        <section class="panel" ng-if="!main.authenticated">
+          <h3>Authentication Required</h3>
+          <p class="note">Sign in from the left panel to access BUSI, preprocessing, NDT, and operational analytics.</p>
+        </section>
       </main>
     </div>
 

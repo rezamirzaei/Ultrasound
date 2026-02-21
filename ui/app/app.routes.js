@@ -22,6 +22,7 @@
           templateUrl: "app/views/preprocessing.html",
           controller: "PreprocessingController",
           controllerAs: "vm",
+          requiredRole: "analyst",
         })
         .when("/ndt", {
           templateUrl: "app/views/ndt.html",

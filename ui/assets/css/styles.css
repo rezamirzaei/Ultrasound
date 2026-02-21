@@ -90,6 +90,11 @@ body {
   display: block;
 }
 
+.sidebar nav a.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .sidebar nav a:hover,
 .sidebar nav a.active {
   color: var(--text-main);
@@ -108,6 +113,36 @@ body {
   font-family: var(--font-mono);
   color: var(--accent-2);
   word-break: break-word;
+}
+
+.auth-panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 8px;
+}
+
+.auth-panel h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.auth-panel label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.auth-panel.authenticated .list {
+  margin: 0;
+}
+
+.auth-hint {
+  font-size: 0.78rem;
+  margin: 0;
 }
 
 .content {

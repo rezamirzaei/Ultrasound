@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck clean docker-test demo api
+.PHONY: install dev test lint format typecheck clean docker-test demo api e2e
 
 install:
 	python -m pip install -e .
@@ -33,3 +33,6 @@ api:
 
 docker-test:
 	docker compose --profile test run --rm test
+
+e2e:
+	pytest e2e/ -v --tb=short

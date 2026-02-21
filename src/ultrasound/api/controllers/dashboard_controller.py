@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ultrasound.api.container import ApplicationContainer
-from ultrasound.api.controllers.dependencies import get_container
+from ultrasound.api.controllers.dependencies import get_container, require_role
 from ultrasound.api.models.schemas import (
     BusiSamplePreview,
     DashboardSummaryResponse,
@@ -17,7 +17,10 @@ from ultrasound.api.models.schemas import (
     NdtSignalPreview,
 )
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(
+    tags=["dashboard"],
+    dependencies=[Depends(require_role("viewer"))],
+)
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)

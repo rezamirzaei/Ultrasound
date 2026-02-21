@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from typing import Literal, Sequence
 
 import numpy as np
-from scipy.signal import find_peaks, hilbert
+from scipy.signal import find_peaks, hilbert, peak_widths
 
 from ultrasound.api.models.domain import (
     NdtAnalyzedDefect,
@@ -14,6 +14,8 @@ from ultrasound.api.models.domain import (
     NdtSignalAnalysisRecord,
     NdtWallEchoRecord,
 )
+
+ThicknessMethod = Literal["time_of_flight", "absolute_backwall", "insufficient_data"]
 
 
 class NdtDetectionService:
@@ -37,9 +39,21 @@ class NdtDetectionService:
             return NdtSignalAnalysisRecord()
 
         envelope = np.abs(hilbert(rf))
-        envelope_smooth, peak_indices, _, _, _, _ = self._detect_peaks(sample, envelope)
+        (
+            envelope_smooth,
+            peak_indices,
+            peak_prominences,
+            peak_height,
+            noise_sigma,
+            _,
+        ) = self._detect_peaks(sample, envelope)
         if peak_indices.size == 0:
             return NdtSignalAnalysisRecord()
+
+        prominence_by_idx = {
+            int(peak_indices[i]): float(peak_prominences[i]) for i in range(peak_indices.size)
+        }
+        dt_us = self._sample_period_us(time_s)
 
         front_wall_idx = self._find_front_wall(peak_indices, time_s)
         back_wall_idx = None
@@ -52,15 +66,97 @@ class NdtDetectionService:
                 front_wall_idx=front_wall_idx,
             )
 
-        estimated_thickness_mm = self._estimate_thickness_mm(
-            sample=sample,
-            time_s=time_s,
-            front_wall_idx=front_wall_idx,
-            back_wall_idx=back_wall_idx,
-        )
+        front_wall = None
+        front_time_us = None
+        front_std_us = None
+        front_confidence = None
+        if front_wall_idx is not None:
+            front_time_us = self._refine_peak_time_us(envelope_smooth, time_s, int(front_wall_idx))
+            front_std_us = self._estimate_time_std_us(
+                envelope_smooth=envelope_smooth,
+                peak_idx=int(front_wall_idx),
+                prominence=prominence_by_idx.get(int(front_wall_idx), 0.0),
+                peak_height=peak_height,
+                noise_sigma=noise_sigma,
+                dt_us=dt_us,
+            )
+            front_confidence = self._echo_confidence(
+                amplitude=float(envelope_smooth[int(front_wall_idx)]),
+                prominence=prominence_by_idx.get(int(front_wall_idx), 0.0),
+                peak_height=peak_height,
+                noise_sigma=noise_sigma,
+            )
+            front_wall = NdtWallEchoRecord(
+                label="front_wall",
+                index=int(front_wall_idx),
+                time_us=front_time_us,
+                depth_m=0.0,
+                amplitude=float(envelope_smooth[int(front_wall_idx)]),
+                confidence=front_confidence,
+                time_std_us=front_std_us,
+            )
+
+        back_wall = None
+        back_time_us = None
+        back_std_us = None
+        back_confidence = None
+        if back_wall_idx is not None:
+            back_time_us = self._refine_peak_time_us(envelope_smooth, time_s, int(back_wall_idx))
+            back_std_us = self._estimate_time_std_us(
+                envelope_smooth=envelope_smooth,
+                peak_idx=int(back_wall_idx),
+                prominence=prominence_by_idx.get(int(back_wall_idx), 0.0),
+                peak_height=peak_height,
+                noise_sigma=noise_sigma,
+                dt_us=dt_us,
+            )
+            back_confidence = self._echo_confidence(
+                amplitude=float(envelope_smooth[int(back_wall_idx)]),
+                prominence=prominence_by_idx.get(int(back_wall_idx), 0.0),
+                peak_height=peak_height,
+                noise_sigma=noise_sigma,
+            )
+
         nominal_thickness_mm = (
             float(sample.thickness_m * 1e3) if sample.thickness_m is not None else None
         )
+        (
+            estimated_thickness_mm,
+            thickness_std_mm,
+            thickness_ci95_lower_mm,
+            thickness_ci95_upper_mm,
+            thickness_confidence,
+            thickness_method,
+        ) = self._resolve_thickness(
+            c_mps=float(sample.c_mps),
+            front_time_us=front_time_us,
+            back_time_us=back_time_us,
+            front_std_us=front_std_us,
+            back_std_us=back_std_us,
+            front_confidence=front_confidence,
+            back_confidence=back_confidence,
+            nominal_thickness_mm=nominal_thickness_mm,
+        )
+
+        if back_wall_idx is not None:
+            back_wall = NdtWallEchoRecord(
+                label="back_wall",
+                index=int(back_wall_idx),
+                time_us=(
+                    float(back_time_us)
+                    if back_time_us is not None
+                    else float(time_s[int(back_wall_idx)] * 1e6)
+                ),
+                depth_m=(
+                    float(estimated_thickness_mm / 1e3)
+                    if estimated_thickness_mm is not None
+                    else None
+                ),
+                amplitude=float(envelope_smooth[int(back_wall_idx)]),
+                confidence=back_confidence,
+                time_std_us=back_std_us,
+            )
+
         thickness_error_mm = None
         if estimated_thickness_mm is not None and nominal_thickness_mm is not None:
             thickness_error_mm = float(estimated_thickness_mm - nominal_thickness_mm)
@@ -69,39 +165,19 @@ class NdtDetectionService:
             total_peaks=int(peak_indices.size),
             peak_indices=[int(v) for v in peak_indices],
             peak_times_us=[float(time_s[int(v)] * 1e6) for v in peak_indices],
-            front_wall=(
-                NdtWallEchoRecord(
-                    label="front_wall",
-                    index=int(front_wall_idx),
-                    time_us=float(time_s[int(front_wall_idx)] * 1e6),
-                    depth_m=0.0,
-                    amplitude=float(envelope_smooth[int(front_wall_idx)]),
-                )
-                if front_wall_idx is not None
-                else None
-            ),
-            back_wall=(
-                NdtWallEchoRecord(
-                    label="back_wall",
-                    index=int(back_wall_idx),
-                    time_us=float(time_s[int(back_wall_idx)] * 1e6),
-                    depth_m=(
-                        float(estimated_thickness_mm / 1e3)
-                        if estimated_thickness_mm is not None
-                        else None
-                    ),
-                    amplitude=float(envelope_smooth[int(back_wall_idx)]),
-                )
-                if back_wall_idx is not None
-                else None
-            ),
+            front_wall=front_wall,
+            back_wall=back_wall,
             estimated_thickness_mm=estimated_thickness_mm,
+            thickness_std_mm=thickness_std_mm,
+            thickness_ci95_lower_mm=thickness_ci95_lower_mm,
+            thickness_ci95_upper_mm=thickness_ci95_upper_mm,
+            thickness_confidence=thickness_confidence,
+            thickness_method=thickness_method,
             nominal_thickness_mm=nominal_thickness_mm,
             thickness_error_mm=thickness_error_mm,
             thinning_flag=self._compute_thinning_flag(
                 sample=sample,
                 estimated_thickness_mm=estimated_thickness_mm,
-                nominal_thickness_mm=nominal_thickness_mm,
             ),
         )
 
@@ -126,9 +202,14 @@ class NdtDetectionService:
             return []
 
         envelope = np.abs(hilbert(rf))
-        envelope_smooth, peak_indices, peak_prominences, peak_height, _, min_peak_distance = (
-            self._detect_peaks(sample, envelope)
-        )
+        (
+            envelope_smooth,
+            peak_indices,
+            peak_prominences,
+            peak_height,
+            _,
+            min_peak_distance,
+        ) = self._detect_peaks(sample, envelope)
         if peak_indices.size == 0:
             return []
 
@@ -183,7 +264,7 @@ class NdtDetectionService:
                 NdtAnalyzedDefect(
                     depth_m=float(depth_m),
                     amplitude=amplitude,
-                    time_us=float(time_s[peak_idx_int] * 1e6),
+                    time_us=self._refine_peak_time_us(envelope_smooth, time_s, peak_idx_int),
                     confidence=confidence,
                     source="signal",
                 )
@@ -208,7 +289,7 @@ class NdtDetectionService:
         noise_region = envelope_smooth[:noise_region_len]
         noise_median = float(np.median(noise_region))
         noise_mad = float(np.median(np.abs(noise_region - noise_median)))
-        noise_sigma = 1.4826 * noise_mad
+        noise_sigma = max(1e-12, 1.4826 * noise_mad)
 
         relative_height = self.min_relative_height * float(np.max(envelope_smooth))
         absolute_height = noise_median + self.noise_sigma_factor * noise_sigma
@@ -268,7 +349,7 @@ class NdtDetectionService:
             expected_back_time_s = front_time_s + 2.0 * float(sample.thickness_m) / float(
                 sample.c_mps
             )
-            tolerance_s = max(0.7e-6, 0.18 * (expected_back_time_s - front_time_s))
+            tolerance_s = max(0.8e-6, 0.20 * (expected_back_time_s - front_time_s))
             nearest_idx = min(
                 candidate_indices, key=lambda p: abs(float(time_s[p]) - expected_back_time_s)
             )
@@ -304,28 +385,136 @@ class NdtDetectionService:
             return None
         return 0.5 * c_mps * (peak_time - front_time)
 
-    def _estimate_thickness_mm(
-        self,
-        sample: NdtSampleRecord,
-        time_s: np.ndarray,
-        front_wall_idx: int | None,
-        back_wall_idx: int | None,
-    ) -> float | None:
-        if front_wall_idx is None or back_wall_idx is None:
-            return None
-        if sample.c_mps <= 0.0:
-            return None
+    def _sample_period_us(self, time_s: np.ndarray) -> float:
+        if time_s.size < 2:
+            return 0.02
+        dt = float(np.median(np.diff(time_s)))
+        return max(1e-6, dt * 1e6)
 
-        tof = float(time_s[int(back_wall_idx)] - time_s[int(front_wall_idx)])
-        if tof <= 0.0:
-            return None
-        return float(0.5 * float(sample.c_mps) * tof * 1e3)
+    def _refine_peak_time_us(
+        self, envelope: np.ndarray, time_s: np.ndarray, peak_idx: int
+    ) -> float:
+        base_time_us = float(time_s[peak_idx] * 1e6)
+        if peak_idx <= 0 or peak_idx >= envelope.size - 1:
+            return base_time_us
+
+        y_prev = float(envelope[peak_idx - 1])
+        y_mid = float(envelope[peak_idx])
+        y_next = float(envelope[peak_idx + 1])
+        denom = y_prev - 2.0 * y_mid + y_next
+        if abs(denom) < 1e-12:
+            return base_time_us
+
+        offset = 0.5 * (y_prev - y_next) / denom
+        offset = float(np.clip(offset, -1.0, 1.0))
+        return base_time_us + offset * self._sample_period_us(time_s)
+
+    def _estimate_time_std_us(
+        self,
+        envelope_smooth: np.ndarray,
+        peak_idx: int,
+        prominence: float,
+        peak_height: float,
+        noise_sigma: float,
+        dt_us: float,
+    ) -> float:
+        try:
+            widths = peak_widths(envelope_smooth, np.array([peak_idx]), rel_height=0.5)[0]
+            width_samples = float(widths[0]) if widths.size else 1.0
+        except Exception:
+            width_samples = 1.0
+
+        amplitude = float(envelope_smooth[peak_idx])
+        snr = amplitude / max(noise_sigma, 1e-12)
+        snr_gain = max(1.0, np.sqrt(max(snr, 1.0)))
+        prominence_gain = max(1.0, np.sqrt(max(prominence / max(peak_height, 1e-12), 1.0)))
+        std_us = (width_samples * dt_us) / (2.355 * snr_gain * prominence_gain)
+        return float(max(0.5 * dt_us, min(std_us, 10.0 * dt_us)))
+
+    def _echo_confidence(
+        self,
+        amplitude: float,
+        prominence: float,
+        peak_height: float,
+        noise_sigma: float,
+    ) -> float:
+        snr = amplitude / max(noise_sigma, 1e-12)
+        snr_score = float(np.clip((snr - 1.0) / 12.0, 0.0, 1.0))
+        prominence_score = float(np.clip(prominence / max(peak_height, 1e-12), 0.0, 1.0))
+        return float(np.clip(0.65 * snr_score + 0.35 * prominence_score, 0.0, 1.0))
+
+    def _resolve_thickness(
+        self,
+        c_mps: float,
+        front_time_us: float | None,
+        back_time_us: float | None,
+        front_std_us: float | None,
+        back_std_us: float | None,
+        front_confidence: float | None,
+        back_confidence: float | None,
+        nominal_thickness_mm: float | None,
+    ) -> tuple[
+        float | None,
+        float | None,
+        float | None,
+        float | None,
+        float | None,
+        ThicknessMethod,
+    ]:
+        if c_mps <= 0.0 or back_time_us is None:
+            return None, None, None, None, None, "insufficient_data"
+
+        candidates: list[tuple[ThicknessMethod, float, float | None]] = []
+
+        abs_thickness_mm = 0.5 * c_mps * back_time_us * 1e-3
+        abs_std_mm = 0.5 * c_mps * float(back_std_us or 0.0) * 1e-3 if back_std_us else None
+        candidates.append(("absolute_backwall", float(abs_thickness_mm), abs_std_mm))
+
+        if front_time_us is not None and back_time_us > front_time_us:
+            tof_us = back_time_us - front_time_us
+            tof_thickness_mm = 0.5 * c_mps * tof_us * 1e-3
+            tof_std_us = None
+            if front_std_us is not None and back_std_us is not None:
+                tof_std_us = float(np.sqrt(front_std_us**2 + back_std_us**2))
+            tof_std_mm = 0.5 * c_mps * tof_std_us * 1e-3 if tof_std_us is not None else None
+            candidates.append(("time_of_flight", float(tof_thickness_mm), tof_std_mm))
+
+        if nominal_thickness_mm is not None:
+            method, estimate_mm, std_mm = min(
+                candidates,
+                key=lambda item: abs(item[1] - nominal_thickness_mm),
+            )
+        else:
+            tof_candidate = [item for item in candidates if item[0] == "time_of_flight"]
+            method, estimate_mm, std_mm = tof_candidate[0] if tof_candidate else candidates[0]
+
+        ci_lower_mm = None
+        ci_upper_mm = None
+        if std_mm is not None:
+            ci_lower_mm = max(0.0, estimate_mm - 1.96 * std_mm)
+            ci_upper_mm = max(ci_lower_mm, estimate_mm + 1.96 * std_mm)
+
+        wall_conf = (
+            float(
+                np.mean(
+                    [value for value in (front_confidence, back_confidence) if value is not None]
+                )
+            )
+            if any(value is not None for value in (front_confidence, back_confidence))
+            else 0.5
+        )
+        if std_mm is not None and estimate_mm > 0.0:
+            rel_unc = float(np.clip(std_mm / max(estimate_mm, 1e-9), 0.0, 1.0))
+            thickness_conf = float(np.clip(wall_conf * np.exp(-2.2 * rel_unc), 0.0, 1.0))
+        else:
+            thickness_conf = float(np.clip(wall_conf * 0.85, 0.0, 1.0))
+
+        return estimate_mm, std_mm, ci_lower_mm, ci_upper_mm, thickness_conf, method
 
     def _compute_thinning_flag(
         self,
         sample: NdtSampleRecord,
         estimated_thickness_mm: float | None,
-        nominal_thickness_mm: float | None,
     ) -> bool:
         if estimated_thickness_mm is None:
             return False
