@@ -15,4 +15,3 @@ def __getattr__(name: str) -> Any:
 
         return app
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
