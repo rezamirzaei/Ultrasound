@@ -904,6 +904,27 @@ class DatasetRepository:
                 split_bucket[str(class_name)] = int(sample_count)
         return counts
 
+    def get_industrial_annotation_count(self, dataset_name: str) -> int:
+        self._ensure_industrial_seeded()
+        normalized_dataset = dataset_name.strip().lower()
+        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
+            raise ValueError(
+                f"Invalid industrial dataset '{dataset_name}'. "
+                f"Expected one of {self.INDUSTRIAL_DATASETS}."
+            )
+
+        with self.db.session_scope() as session:
+            count = int(
+                session.scalar(
+                    select(func.count(IndustrialSampleORM.id)).where(
+                        IndustrialSampleORM.dataset_name == normalized_dataset,
+                        IndustrialSampleORM.annotation_blob.is_not(None),
+                    )
+                )
+                or 0
+            )
+        return count
+
     def get_industrial_sample(
         self,
         dataset_name: str,

@@ -667,6 +667,10 @@ def test_industrial_training_and_segmentation_endpoints(client: TestClient) -> N
     assert latest_before_payload["dataset_name"] == "neu_surface"
     assert latest_before_payload["run_id"] is None
     assert latest_before_payload["curve"] == []
+    assert latest_before_payload["task_type"] == "classification_single_label_with_bbox"
+    assert latest_before_payload["classification_mode"] in {"binary", "multiclass"}
+    assert latest_before_payload["label_source"] == "folder_name_plus_xml_bbox"
+    assert latest_before_payload["segmentation_supported"] is True
 
     segmentation_preview = client.get(
         "/api/v1/datasets/industrial/segmentation/neu_surface/train/crazing/0",
@@ -676,6 +680,8 @@ def test_industrial_training_and_segmentation_endpoints(client: TestClient) -> N
     seg_payload = segmentation_preview.json()
     assert seg_payload["dataset_name"] == "neu_surface"
     assert seg_payload["source"] == "annotation_xml"
+    assert seg_payload["task_type"] == "classification_single_label_with_bbox"
+    assert seg_payload["segmentation_supported"] is True
     assert seg_payload["bbox_count"] >= 1
     assert seg_payload["mask_data_url"].startswith("data:image/png;base64,")
 
@@ -707,6 +713,10 @@ def test_industrial_training_and_segmentation_endpoints(client: TestClient) -> N
     assert run_payload["run_id"] is not None
     assert run_payload["dataset_name"] == "neu_surface"
     assert run_payload["storage"] == "sql"
+    assert run_payload["task_type"] == "classification_single_label_with_bbox"
+    assert run_payload["classification_mode"] in {"binary", "multiclass"}
+    assert run_payload["label_source"] == "folder_name_plus_xml_bbox"
+    assert run_payload["segmentation_supported"] is True
     assert run_payload["train_samples"] > 0
     assert run_payload["test_samples"] > 0
     assert run_payload["annotated_samples"] >= 1
@@ -723,6 +733,46 @@ def test_industrial_training_and_segmentation_endpoints(client: TestClient) -> N
     latest_after_payload = latest_after.json()
     assert latest_after_payload["run_id"] == run_payload["run_id"]
     assert latest_after_payload["curve"]
+
+
+def test_classification_only_datasets_report_segmentation_unavailable(client: TestClient) -> None:
+    headers = _auth_headers(client, username="viewer", password="viewer123")
+
+    steel_seg = client.get(
+        "/api/v1/datasets/industrial/segmentation/steel_defect/train/crazing/0",
+        headers=headers,
+    )
+    assert steel_seg.status_code == 200
+    steel_payload = steel_seg.json()
+    assert steel_payload["task_type"] == "classification_single_label"
+    assert steel_payload["segmentation_supported"] is False
+    assert steel_payload["source"] == "none"
+    assert steel_payload["bbox_count"] == 0
+    assert "Thumbs.db" in steel_payload["message"]
+
+    casting_seg = client.get(
+        "/api/v1/datasets/industrial/segmentation/casting_defect/train/def_front/0",
+        headers=headers,
+    )
+    assert casting_seg.status_code == 200
+    casting_payload = casting_seg.json()
+    assert casting_payload["task_type"] == "classification_single_label"
+    assert casting_payload["segmentation_supported"] is False
+    assert casting_payload["source"] == "none"
+    assert casting_payload["bbox_count"] == 0
+    assert "classification-only" in casting_payload["message"]
+
+    casting_latest = client.get(
+        "/api/v1/datasets/industrial/training/latest",
+        params={"dataset_name": "casting_defect"},
+        headers=headers,
+    )
+    assert casting_latest.status_code == 200
+    casting_latest_payload = casting_latest.json()
+    assert casting_latest_payload["task_type"] == "classification_single_label"
+    assert casting_latest_payload["classification_mode"] == "binary"
+    assert casting_latest_payload["segmentation_supported"] is False
+    assert casting_latest_payload["label_source"] == "folder_name"
 
 
 def test_busi_training_endpoints(client: TestClient) -> None:

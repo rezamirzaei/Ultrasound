@@ -68,13 +68,26 @@
       <li><span>Resolved Index</span><strong>{{ vm.sample.resolved_index }}</strong></li>
       <li><span>Total Samples</span><strong>{{ vm.sample.total_samples }}</strong></li>
       <li><span>Annotation</span><strong>{{ vm.sample.has_annotation ? 'Yes' : 'No' }}</strong></li>
+      <li>
+        <span>Task</span>
+        <strong>{{ vm.segmentation && vm.segmentation.task_type ? vm.segmentation.task_type : 'classification_single_label' }}</strong>
+      </li>
     </ul>
   </div>
 
   <div class="panel" ng-if="vm.segmentation">
     <h3>Segmentation Preview</h3>
-    <img class="preview-image" ng-src="{{ vm.segmentation.mask_data_url }}" alt="Industrial annotation mask preview" />
+    <img
+      class="preview-image"
+      ng-if="vm.segmentation.segmentation_supported"
+      ng-src="{{ vm.segmentation.mask_data_url }}"
+      alt="Industrial annotation mask preview"
+    />
+    <p class="note" ng-if="!vm.segmentation.segmentation_supported">
+      {{ vm.segmentation.message || 'Segmentation is not available for this dataset.' }}
+    </p>
     <ul class="list compact">
+      <li><span>Supported</span><strong>{{ vm.segmentation.segmentation_supported ? 'Yes' : 'No' }}</strong></li>
       <li><span>Source</span><strong>{{ vm.segmentation.source }}</strong></li>
       <li><span>BBox Count</span><strong>{{ vm.segmentation.bbox_count }}</strong></li>
       <li>
@@ -83,6 +96,7 @@
       </li>
       <li><span>Relative Path</span><strong>{{ vm.segmentation.relative_path }}</strong></li>
     </ul>
+    <p class="note">{{ vm.segmentation.message }}</p>
   </div>
 </section>
 
@@ -121,13 +135,17 @@
     <metric-tile label="Run ID" value="vm.training.run_id || 'n/a'" tone="muted"></metric-tile>
     <metric-tile label="Train Accuracy" value="vm.formatPct(vm.training.train_accuracy)" tone="accent"></metric-tile>
     <metric-tile label="Test Accuracy" value="vm.formatPct(vm.training.test_accuracy)" tone="accent"></metric-tile>
+    <metric-tile label="Task Type" value="vm.training.task_type"></metric-tile>
+    <metric-tile label="Class Mode" value="vm.training.classification_mode"></metric-tile>
+    <metric-tile label="Label Source" value="vm.training.label_source"></metric-tile>
+    <metric-tile label="Segmentation" value="vm.training.segmentation_supported ? 'enabled' : 'disabled'"></metric-tile>
     <metric-tile label="Train Samples" value="vm.training.train_samples"></metric-tile>
     <metric-tile label="Test Samples" value="vm.training.test_samples"></metric-tile>
     <metric-tile label="Annotated Samples" value="vm.training.annotated_samples"></metric-tile>
     <metric-tile label="Storage" value="vm.training.storage | uppercase" tone="muted"></metric-tile>
   </div>
 
-  <table class="result-table" ng-if="vm.training">
+  <table class="result-table" ng-if="vm.training && vm.training.segmentation_supported">
     <thead>
       <tr>
         <th>Segmentation Metric</th>
@@ -148,6 +166,12 @@
       </tr>
     </tbody>
   </table>
+  <p class="note" ng-if="vm.training && !vm.training.segmentation_supported">
+    {{ vm.training.segmentation_notes || 'Segmentation metrics are unavailable for this dataset.' }}
+  </p>
+  <p class="note" ng-if="vm.training && vm.training.segmentation_supported && vm.training.segmentation_notes">
+    {{ vm.training.segmentation_notes }}
+  </p>
 
   <div class="signal-card" ng-if="vm.trainingChart">
     <svg class="signal-chart busi-curve-chart" viewBox="0 0 {{ vm.trainingChart.width }} {{ vm.trainingChart.height }}" preserveAspectRatio="none">

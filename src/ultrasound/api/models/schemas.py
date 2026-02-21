@@ -177,6 +177,14 @@ class IndustrialTrainingResponse(BaseModel):
     test_samples: int = Field(ge=0)
     class_counts: Dict[str, int]
     class_labels: List[str]
+    task_type: Literal[
+        "classification_single_label",
+        "classification_single_label_with_bbox",
+    ] = "classification_single_label"
+    classification_mode: Literal["binary", "multiclass"] = "multiclass"
+    label_source: Literal["folder_name", "folder_name_plus_xml_bbox"] = "folder_name"
+    segmentation_supported: bool = False
+    segmentation_notes: str | None = None
     train_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
     test_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
     train_loss: float | None = Field(default=None, ge=0.0)
@@ -266,6 +274,12 @@ class IndustrialSegmentationPreview(BaseModel):
     image_shape: List[int]
     bbox_count: int = Field(default=0, ge=0)
     annotation_coverage_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
+    task_type: Literal[
+        "classification_single_label",
+        "classification_single_label_with_bbox",
+    ] = "classification_single_label"
+    segmentation_supported: bool = False
+    message: str | None = None
     source: Literal["annotation_xml", "none"] = "none"
     image_data_url: str
     mask_data_url: str

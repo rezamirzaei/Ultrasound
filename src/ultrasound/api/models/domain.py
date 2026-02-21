@@ -266,6 +266,14 @@ class IndustrialTrainingRunRecord(BaseModel):
     test_samples: int = Field(ge=1)
     class_counts: Dict[str, int]
     class_labels: list[str]
+    task_type: Literal[
+        "classification_single_label",
+        "classification_single_label_with_bbox",
+    ] = "classification_single_label"
+    classification_mode: Literal["binary", "multiclass"] = "multiclass"
+    label_source: Literal["folder_name", "folder_name_plus_xml_bbox"] = "folder_name"
+    segmentation_supported: bool = False
+    segmentation_notes: str | None = None
     train_accuracy: float = Field(ge=0.0, le=1.0)
     test_accuracy: float = Field(ge=0.0, le=1.0)
     train_loss: float = Field(ge=0.0)

@@ -33,6 +33,61 @@ class IndustrialTrainingService:
         self.dataset_repository = dataset_repository
         self.media_service = media_service
 
+    def _resolve_task_profile(
+        self,
+        dataset_name: str,
+        class_labels: list[str],
+        annotated_samples: int,
+    ) -> tuple[
+        Literal["classification_single_label", "classification_single_label_with_bbox"],
+        Literal["binary", "multiclass"],
+        Literal["folder_name", "folder_name_plus_xml_bbox"],
+        bool,
+        str,
+    ]:
+        segmentation_supported = int(annotated_samples) > 0
+        task_type: Literal["classification_single_label", "classification_single_label_with_bbox"]
+        label_source: Literal["folder_name", "folder_name_plus_xml_bbox"]
+        if segmentation_supported:
+            task_type = "classification_single_label_with_bbox"
+            label_source = "folder_name_plus_xml_bbox"
+        else:
+            task_type = "classification_single_label"
+            label_source = "folder_name"
+
+        classification_mode: Literal["binary", "multiclass"] = (
+            "binary" if len(class_labels) == 2 else "multiclass"
+        )
+
+        if segmentation_supported:
+            segmentation_notes = (
+                "Annotation labels are available: segmentation masks are derived from XML "
+                "bounding boxes."
+            )
+        elif dataset_name == "casting_defect":
+            segmentation_notes = (
+                "Casting dataset is classification-only in current storage "
+                "(def_front vs ok_front); no segmentation labels found."
+            )
+        elif dataset_name == "steel_defect":
+            segmentation_notes = (
+                "Steel dataset labels come from train/valid/test class folders; "
+                "Thumbs.db is ignored and does not provide supervised labels."
+            )
+        else:
+            segmentation_notes = (
+                "No annotation labels were found in current SQL storage; "
+                "segmentation is unavailable for this dataset."
+            )
+
+        return (
+            task_type,
+            classification_mode,
+            label_source,
+            segmentation_supported,
+            segmentation_notes,
+        )
+
     def _extract_features(self, image_rgb: np.ndarray) -> np.ndarray:
         gray = np.asarray(image_rgb, dtype=np.float32).mean(axis=2)
         gray = np.clip(gray, 0.0, 255.0).astype(np.uint8)
@@ -230,13 +285,15 @@ class IndustrialTrainingService:
         return (2.0 * intersection) / denom
 
     def _baseline_segmentation_metrics(
-        self, samples: Iterable[IndustrialTrainingSampleRecord]
+        self, samples: Iterable[IndustrialTrainingSampleRecord], max_samples: int = 240
     ) -> tuple[float | None, float | None, int]:
         iou_scores: list[float] = []
         dice_scores: list[float] = []
         annotated_samples = 0
 
-        for sample in samples:
+        for sample_index, sample in enumerate(samples):
+            if sample_index >= int(max_samples):
+                break
             if sample.annotation_blob is None:
                 continue
             gt_mask, bbox_count = self._mask_from_annotation(
@@ -278,6 +335,11 @@ class IndustrialTrainingService:
             test_samples=run.test_samples,
             class_counts=run.class_counts,
             class_labels=run.class_labels,
+            task_type=run.task_type,
+            classification_mode=run.classification_mode,
+            label_source=run.label_source,
+            segmentation_supported=run.segmentation_supported,
+            segmentation_notes=run.segmentation_notes,
             train_accuracy=run.train_accuracy,
             test_accuracy=run.test_accuracy,
             train_loss=run.train_loss,
@@ -310,6 +372,19 @@ class IndustrialTrainingService:
         for class_map in counts.values():
             for class_name, n in class_map.items():
                 class_counts[class_name] = int(class_counts.get(class_name, 0) + int(n))
+        class_labels = sorted(class_counts.keys())
+        annotation_count = self.dataset_repository.get_industrial_annotation_count(dataset_name)
+        (
+            task_type,
+            classification_mode,
+            label_source,
+            segmentation_supported,
+            segmentation_notes,
+        ) = self._resolve_task_profile(
+            dataset_name=dataset_name,
+            class_labels=class_labels,
+            annotated_samples=annotation_count,
+        )
 
         return IndustrialTrainingResponse(
             run_id=None,
@@ -325,13 +400,18 @@ class IndustrialTrainingService:
             train_samples=0,
             test_samples=0,
             class_counts=class_counts,
-            class_labels=sorted(class_counts.keys()),
+            class_labels=class_labels,
+            task_type=task_type,
+            classification_mode=classification_mode,
+            label_source=label_source,
+            segmentation_supported=segmentation_supported,
+            segmentation_notes=segmentation_notes,
             train_accuracy=None,
             test_accuracy=None,
             train_loss=None,
             test_loss=None,
             curve=[],
-            annotated_samples=0,
+            annotated_samples=int(annotation_count),
             segmentation_iou_train=None,
             segmentation_iou_test=None,
             segmentation_dice_train=None,
@@ -363,15 +443,34 @@ class IndustrialTrainingService:
         if not curve:
             raise ValueError("Industrial training produced no curve points.")
 
-        seg_iou_train, seg_dice_train, ann_train = self._baseline_segmentation_metrics(
-            train_samples
-        )
-        seg_iou_test, seg_dice_test, ann_test = self._baseline_segmentation_metrics(test_samples)
+        has_annotation_blob = any(
+            sample.annotation_blob is not None for sample in train_samples
+        ) or any(sample.annotation_blob is not None for sample in test_samples)
+        if has_annotation_blob:
+            seg_iou_train, seg_dice_train, ann_train = self._baseline_segmentation_metrics(
+                train_samples
+            )
+            seg_iou_test, seg_dice_test, ann_test = self._baseline_segmentation_metrics(
+                test_samples
+            )
+        else:
+            seg_iou_train, seg_dice_train, ann_train = None, None, 0
+            seg_iou_test, seg_dice_test, ann_test = None, None, 0
         annotated_samples = int(ann_train + ann_test)
+        (
+            task_type,
+            classification_mode,
+            label_source,
+            segmentation_supported,
+            segmentation_notes,
+        ) = self._resolve_task_profile(
+            dataset_name=request.dataset_name,
+            class_labels=class_labels,
+            annotated_samples=annotated_samples,
+        )
 
         notes = (
-            "Classification is SGD(log-loss) over deterministic SQL splits. "
-            "Segmentation metrics use annotation-driven bbox masks with a threshold baseline."
+            "Classification is SGD(log-loss) over deterministic SQL splits. " + segmentation_notes
         )
         last = curve[-1]
         run = IndustrialTrainingRunRecord(
@@ -384,6 +483,11 @@ class IndustrialTrainingService:
             test_samples=int(x_test.shape[0]),
             class_counts=class_counts,
             class_labels=class_labels,
+            task_type=task_type,
+            classification_mode=classification_mode,
+            label_source=label_source,
+            segmentation_supported=segmentation_supported,
+            segmentation_notes=segmentation_notes,
             train_accuracy=last.train_accuracy,
             test_accuracy=last.test_accuracy,
             train_loss=last.train_loss,
@@ -413,6 +517,16 @@ class IndustrialTrainingService:
             class_name=class_name,
             index=sample_index,
         )
+        annotation_count = self.dataset_repository.get_industrial_annotation_count(dataset_name)
+        class_counts = self.dataset_repository.get_industrial_counts().get(dataset_name, {})
+        class_labels = sorted(
+            {class_name_key for split_map in class_counts.values() for class_name_key in split_map}
+        )
+        task_type, _, _, segmentation_supported, segmentation_notes = self._resolve_task_profile(
+            dataset_name=dataset_name,
+            class_labels=class_labels,
+            annotated_samples=annotation_count,
+        )
 
         mask = np.zeros(sample.image_rgb.shape[:2], dtype=np.uint8)
         bbox_count = 0
@@ -429,6 +543,15 @@ class IndustrialTrainingService:
                 source = "annotation_xml"
 
         coverage = float(np.count_nonzero(mask)) / float(mask.size) if mask.size else 0.0
+        if not segmentation_supported:
+            message = segmentation_notes
+        elif source == "none":
+            message = (
+                "Segmentation is supported for this dataset, but this sample has no valid "
+                "annotation bbox."
+            )
+        else:
+            message = "Segmentation mask rendered from annotation XML bounding boxes."
 
         return IndustrialSegmentationPreview(
             dataset_name=sample.dataset_name,
@@ -440,6 +563,9 @@ class IndustrialTrainingService:
             image_shape=[int(v) for v in sample.image_rgb.shape],
             bbox_count=bbox_count,
             annotation_coverage_ratio=coverage,
+            task_type=task_type,
+            segmentation_supported=segmentation_supported,
+            message=message,
             source=source,
             image_data_url=self.media_service.as_png_data_url(sample.image_rgb),
             mask_data_url=self.media_service.as_png_data_url(mask),
