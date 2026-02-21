@@ -47,13 +47,31 @@
           <button id="logout-submit" class="btn btn-muted" type="button" ng-click="main.logout()">Logout</button>
         </section>
         <nav>
-          <a ng-class="{active: main.isActive('/dashboard'), disabled: !main.authenticated}" ng-href="{{ main.authenticated ? '#/dashboard' : '' }}">Dashboard</a>
-          <a ng-class="{active: main.isActive('/busi'), disabled: !main.authenticated}" ng-href="{{ main.authenticated ? '#/busi' : '' }}">BUSI Explorer</a>
           <a
+            href=""
+            ng-click="main.navigate('/dashboard', true, null, $event)"
+            ng-class="{active: main.isActive('/dashboard'), disabled: !main.authenticated}"
+          >Dashboard</a>
+          <a
+            href=""
+            ng-click="main.navigate('/busi', true, null, $event)"
+            ng-class="{active: main.isActive('/busi'), disabled: !main.authenticated}"
+          >BUSI Explorer</a>
+          <a
+            href=""
+            ng-click="main.navigate('/industrial', true, null, $event)"
+            ng-class="{active: main.isActive('/industrial'), disabled: !main.authenticated}"
+          >Industrial Lab</a>
+          <a
+            href=""
+            ng-click="main.navigate('/preprocessing', true, 'analyst', $event)"
             ng-class="{active: main.isActive('/preprocessing'), disabled: !main.canAccess('analyst')}"
-            ng-href="{{ main.canAccess('analyst') ? '#/preprocessing' : '' }}"
           >Preprocessing Lab</a>
-          <a ng-class="{active: main.isActive('/ndt'), disabled: !main.authenticated}" ng-href="{{ main.authenticated ? '#/ndt' : '' }}">NDT Explorer</a>
+          <a
+            href=""
+            ng-click="main.navigate('/ndt', true, null, $event)"
+            ng-class="{active: main.isActive('/ndt'), disabled: !main.authenticated}"
+          >NDT Explorer</a>
         </nav>
         <div class="sidebar-footer">
           <span>REST API</span>
@@ -84,6 +102,7 @@
     <script src="app/controllers/main.controller.js"></script>
     <script src="app/controllers/dashboard.controller.js"></script>
     <script src="app/controllers/busi.controller.js"></script>
+    <script src="app/controllers/industrial.controller.js"></script>
     <script src="app/controllers/preprocessing.controller.js"></script>
     <script src="app/controllers/ndt.controller.js"></script>
   </body>

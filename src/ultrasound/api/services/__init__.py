@@ -6,6 +6,7 @@ from .dashboard_service import DashboardService
 from .data_ingestion_service import DataIngestionService
 from .dataset_upload_service import DatasetUploadService
 from .error_analytics_service import ErrorAnalyticsService
+from .industrial_training_service import IndustrialTrainingService
 from .job_queue_service import JobQueueService
 from .media_service import MediaService
 from .ndt_detection_service import NdtDetectionService
@@ -19,6 +20,7 @@ __all__ = [
     "DatasetUploadService",
     "DashboardService",
     "ErrorAnalyticsService",
+    "IndustrialTrainingService",
     "JobQueueService",
     "MediaService",
     "NdtDetectionService",

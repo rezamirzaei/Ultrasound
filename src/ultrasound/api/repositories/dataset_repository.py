@@ -19,6 +19,7 @@ from ultrasound.api.database.models import (
     BusiTrainingRunORM,
     DatasetMetaORM,
     IndustrialSampleORM,
+    IndustrialTrainingRunORM,
     NdtDefectORM,
     NdtSampleORM,
 )
@@ -29,6 +30,8 @@ from ultrasound.api.models.domain import (
     BusiTrainingSampleRecord,
     BusiUploadRecord,
     IndustrialSampleRecord,
+    IndustrialTrainingRunRecord,
+    IndustrialTrainingSampleRecord,
     IndustrialUploadRecord,
     NdtDefectRecord,
     NdtSampleRecord,
@@ -805,6 +808,78 @@ class DatasetRepository:
             )
         return samples
 
+    def list_industrial_training_samples(
+        self, dataset_name: str
+    ) -> tuple[list[IndustrialTrainingSampleRecord], dict[str, int], list[str]]:
+        self._ensure_industrial_seeded()
+        normalized_dataset = dataset_name.strip().lower()
+        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
+            raise ValueError(
+                f"Invalid industrial dataset '{dataset_name}'. "
+                f"Expected one of {self.INDUSTRIAL_DATASETS}."
+            )
+
+        with self.db.session_scope() as session:
+            rows = session.scalars(
+                select(IndustrialSampleORM)
+                .where(IndustrialSampleORM.dataset_name == normalized_dataset)
+                .order_by(
+                    IndustrialSampleORM.split,
+                    IndustrialSampleORM.class_name,
+                    IndustrialSampleORM.image_filename,
+                )
+            ).all()
+
+        if not rows:
+            raise ValueError(f"No samples found in SQL storage for dataset '{normalized_dataset}'.")
+
+        class_names = sorted({str(row.class_name) for row in rows})
+        class_to_label = {name: idx for idx, name in enumerate(class_names)}
+
+        split_alias = {"train": "train", "test": "test", "validation": "test", "valid": "test"}
+        parsed_samples: list[IndustrialTrainingSampleRecord] = []
+        class_counts: dict[str, int] = {class_name: 0 for class_name in class_names}
+
+        for row in rows:
+            if row.id is None:
+                continue
+            class_name = str(row.class_name)
+            label = class_to_label[class_name]
+            normalized_split = split_alias.get(str(row.split).strip().lower(), "train")
+            class_counts[class_name] = int(class_counts.get(class_name, 0) + 1)
+            parsed_samples.append(
+                IndustrialTrainingSampleRecord(
+                    sample_id=int(row.id),
+                    dataset_name=cast(
+                        Literal["steel_defect", "neu_surface", "casting_defect"],
+                        normalized_dataset,
+                    ),
+                    class_name=class_name,
+                    label=int(label),
+                    split=cast(Literal["train", "test"], normalized_split),
+                    image_rgb=self._decode_rgb_blob(row.image_blob),
+                    annotation_blob=row.annotation_blob,
+                )
+            )
+
+        if len(parsed_samples) < 2:
+            raise ValueError(
+                f"Dataset '{normalized_dataset}' needs at least 2 samples for train/test evaluation."
+            )
+
+        n_train = sum(1 for sample in parsed_samples if sample.split == "train")
+        n_test = sum(1 for sample in parsed_samples if sample.split == "test")
+        if n_train <= 0 or n_test <= 0:
+            rebuilt: list[IndustrialTrainingSampleRecord] = []
+            for index, sample in enumerate(parsed_samples):
+                rebuilt_split: Literal["train", "test"] = (
+                    "train" if index < max(1, int(round(0.8 * len(parsed_samples)))) else "test"
+                )
+                rebuilt.append(sample.model_copy(update={"split": rebuilt_split}))
+            parsed_samples = rebuilt
+
+        return parsed_samples, class_counts, class_names
+
     def get_industrial_counts(self) -> dict[str, dict[str, dict[str, int]]]:
         self._ensure_industrial_seeded()
         counts: dict[str, dict[str, dict[str, int]]] = {
@@ -890,6 +965,7 @@ class DatasetRepository:
             total_samples=total_samples,
             relative_path=sample.relative_path,
             image_rgb=image_rgb,
+            annotation_blob=sample.annotation_blob,
             has_annotation=sample.annotation_blob is not None,
         )
 
@@ -925,6 +1001,51 @@ class DatasetRepository:
 
         try:
             parsed = BusiTrainingRunRecord.model_validate_json(row.payload_json)
+        except Exception:
+            return None
+        return parsed.model_copy(update={"run_id": int(row.id)})
+
+    def save_industrial_training_run(
+        self, run: IndustrialTrainingRunRecord
+    ) -> IndustrialTrainingRunRecord:
+        payload = run.model_dump_json()
+        with self.db.session_scope() as session:
+            row = IndustrialTrainingRunORM(
+                dataset_name=run.dataset_name,
+                train_accuracy=float(run.train_accuracy),
+                test_accuracy=float(run.test_accuracy),
+                payload_json=payload,
+            )
+            session.add(row)
+            session.flush()
+            if row.id is None:
+                raise RuntimeError("Could not persist industrial training run.")
+            run_id = int(row.id)
+        return run.model_copy(update={"run_id": run_id})
+
+    def get_latest_industrial_training_run(
+        self, dataset_name: str
+    ) -> IndustrialTrainingRunRecord | None:
+        normalized_dataset = dataset_name.strip().lower()
+        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
+            raise ValueError(
+                f"Invalid industrial dataset '{dataset_name}'. "
+                f"Expected one of {self.INDUSTRIAL_DATASETS}."
+            )
+
+        with self.db.session_scope() as session:
+            row = session.scalars(
+                select(IndustrialTrainingRunORM)
+                .where(IndustrialTrainingRunORM.dataset_name == normalized_dataset)
+                .order_by(IndustrialTrainingRunORM.id.desc())
+                .limit(1)
+            ).first()
+
+        if row is None:
+            return None
+
+        try:
+            parsed = IndustrialTrainingRunRecord.model_validate_json(row.payload_json)
         except Exception:
             return None
         return parsed.model_copy(update={"run_id": int(row.id)})

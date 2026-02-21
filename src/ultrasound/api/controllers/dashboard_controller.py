@@ -16,6 +16,9 @@ from ultrasound.api.models.schemas import (
     DataReadinessResponse,
     IndustrialDatasetSummaryResponse,
     IndustrialSamplePreview,
+    IndustrialSegmentationPreview,
+    IndustrialTrainingRequest,
+    IndustrialTrainingResponse,
     NdtSampleDetail,
     NdtSampleSummary,
     NdtSignalPreview,
@@ -71,6 +74,55 @@ def get_industrial_sample_preview(
     """Return one industrial sample preview for selected dataset/split/class."""
     try:
         return container.dashboard_service.get_industrial_sample_preview(
+            dataset_name=dataset_name,
+            split=split,
+            class_name=class_name,
+            sample_index=sample_index,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/datasets/industrial/training/latest", response_model=IndustrialTrainingResponse)
+def get_latest_industrial_training(
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"] = Query(
+        default="steel_defect"
+    ),
+    container: ApplicationContainer = Depends(get_container),
+) -> IndustrialTrainingResponse:
+    """Return latest industrial training metrics and learning curve from SQL storage."""
+    return container.industrial_training_service.get_latest_run(dataset_name=dataset_name)
+
+
+@router.post("/datasets/industrial/training/run", response_model=IndustrialTrainingResponse)
+def run_industrial_training(
+    request: IndustrialTrainingRequest,
+    _role: object = Depends(require_role("analyst")),
+    container: ApplicationContainer = Depends(get_container),
+) -> IndustrialTrainingResponse:
+    """Train industrial classifier from SQL-backed samples and persist run metrics."""
+    try:
+        return container.industrial_training_service.run_training(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/datasets/industrial/segmentation/{dataset_name}/{split}/{class_name}/{sample_index}",
+    response_model=IndustrialSegmentationPreview,
+)
+def get_industrial_segmentation_preview(
+    dataset_name: str,
+    split: str,
+    class_name: str,
+    sample_index: int,
+    container: ApplicationContainer = Depends(get_container),
+) -> IndustrialSegmentationPreview:
+    """Return one industrial image + segmentation mask preview (annotation-derived when available)."""
+    try:
+        return container.industrial_training_service.get_segmentation_preview(
             dataset_name=dataset_name,
             split=split,
             class_name=class_name,

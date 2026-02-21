@@ -18,6 +18,7 @@
     <div class="toolbar">
       <button class="btn" ng-click="vm.refresh()">Refresh</button>
       <button class="btn btn-muted" ng-click="vm.go('/busi')">Open BUSI Explorer</button>
+      <button class="btn btn-muted" ng-click="vm.go('/industrial')">Open Industrial Lab</button>
       <button class="btn btn-muted" ng-click="vm.go('/preprocessing')">Run Preprocessing</button>
     </div>
   </div>
@@ -354,6 +355,26 @@
       <li><span>Queued Job</span><strong>#{{ vm.resyncResult.job_id }}</strong></li>
       <li><span>Queued At</span><strong>{{ vm.resyncResult.generated_at | date:'medium' }}</strong></li>
     </ul>
+    <p class="note signal-error" ng-if="vm.schemaError">{{ vm.schemaError }}</p>
+    <ul class="list compact" ng-if="vm.schemaStatus">
+      <li><span>Alembic Current</span><strong>{{ vm.schemaStatus.alembic_current_revision || 'not stamped' }}</strong></li>
+      <li><span>Alembic Head</span><strong>{{ vm.schemaStatus.alembic_head_revision || 'unknown' }}</strong></li>
+      <li><span>Database</span><strong>{{ vm.schemaStatus.database_url }}</strong></li>
+    </ul>
+    <table class="result-table" ng-if="vm.schemaStatus && vm.schemaStatus.tables.length">
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Rows</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="row in vm.schemaStatus.tables | limitTo:12">
+          <td>{{ row.table_name }}</td>
+          <td>{{ row.row_count }}</td>
+        </tr>
+      </tbody>
+    </table>
     <p class="note" ng-if="!vm.opsSummary">No server error summary available.</p>
     <div class="metric-grid" ng-if="vm.opsSummary">
       <metric-tile label="Window (min)" value="vm.opsSummary.window_minutes" tone="muted"></metric-tile>

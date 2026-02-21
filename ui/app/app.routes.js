@@ -29,6 +29,11 @@
           controller: "NdtController",
           controllerAs: "vm",
         })
+        .when("/industrial", {
+          templateUrl: "app/views/industrial.html",
+          controller: "IndustrialController",
+          controllerAs: "vm",
+        })
         .otherwise({ redirectTo: "/dashboard" });
     },
   ]);

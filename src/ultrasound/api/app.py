@@ -111,6 +111,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         try:
             response = await call_next(request)
             status_code = int(response.status_code)
+            if request.url.path.startswith("/ui/app/views/") and request.url.path.endswith(".html"):
+                response.headers["Cache-Control"] = "no-store, max-age=0"
+                if "etag" in response.headers:
+                    del response.headers["etag"]
+                if "last-modified" in response.headers:
+                    del response.headers["last-modified"]
             response.headers["X-Request-ID"] = _request_id(request)
             return response
         except Exception as exc:

@@ -28,6 +28,19 @@
         return ApiService.hasRole(role);
       };
 
+      vm.navigate = function (path, requiresAuth, requiredRole, $event) {
+        if ($event && typeof $event.preventDefault === "function") {
+          $event.preventDefault();
+        }
+        if (requiresAuth && !vm.authenticated) {
+          return;
+        }
+        if (requiredRole && !vm.canAccess(requiredRole)) {
+          return;
+        }
+        $location.path(path);
+      };
+
       vm.login = function () {
         vm.authLoading = true;
         vm.authError = null;
@@ -68,6 +81,7 @@
       var pageMap = {
         "/dashboard": "Project Dashboard",
         "/busi": "BUSI Explorer",
+        "/industrial": "Industrial Learning Lab",
         "/preprocessing": "Preprocessing Lab",
         "/ndt": "NDT Sample Explorer",
       };

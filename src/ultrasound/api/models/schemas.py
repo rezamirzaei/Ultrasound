@@ -150,9 +150,49 @@ class BusiTrainingResponse(BaseModel):
     notes: str | None = None
 
 
+class IndustrialTrainingRequest(BaseModel):
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"]
+    epochs: int = Field(default=12, ge=2, le=100)
+    batch_size: int = Field(default=16, ge=4, le=256)
+    learning_rate: float = Field(default=0.01, gt=0.0, le=1.0)
+
+
+class IndustrialTrainingCurvePoint(BaseModel):
+    epoch: int = Field(ge=1)
+    train_accuracy: float = Field(ge=0.0, le=1.0)
+    test_accuracy: float = Field(ge=0.0, le=1.0)
+    train_loss: float = Field(ge=0.0)
+    test_loss: float = Field(ge=0.0)
+
+
+class IndustrialTrainingResponse(BaseModel):
+    run_id: int | None = Field(default=None, ge=1)
+    generated_at: datetime
+    storage: Literal["sql"] = "sql"
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"]
+    epochs: int = Field(ge=0)
+    batch_size: int = Field(ge=0)
+    learning_rate: float = Field(ge=0.0)
+    train_samples: int = Field(ge=0)
+    test_samples: int = Field(ge=0)
+    class_counts: Dict[str, int]
+    class_labels: List[str]
+    train_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
+    test_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
+    train_loss: float | None = Field(default=None, ge=0.0)
+    test_loss: float | None = Field(default=None, ge=0.0)
+    curve: List[IndustrialTrainingCurvePoint] = Field(default_factory=list)
+    annotated_samples: int = Field(default=0, ge=0)
+    segmentation_iou_train: float | None = Field(default=None, ge=0.0, le=1.0)
+    segmentation_iou_test: float | None = Field(default=None, ge=0.0, le=1.0)
+    segmentation_dice_train: float | None = Field(default=None, ge=0.0, le=1.0)
+    segmentation_dice_test: float | None = Field(default=None, ge=0.0, le=1.0)
+    notes: str | None = None
+
+
 class JobEnqueueResponse(BaseModel):
     job_id: int = Field(ge=1)
-    job_type: Literal["busi_training", "dataset_resync"]
+    job_type: Literal["busi_training", "dataset_resync", "industrial_training"]
     status: Literal["pending", "running", "completed", "failed"]
     requested_by: str
     submitted_at: datetime
@@ -213,6 +253,22 @@ class IndustrialSamplePreview(BaseModel):
     image_shape: List[int]
     has_annotation: bool = False
     image_data_url: str
+    relative_path: str
+
+
+class IndustrialSegmentationPreview(BaseModel):
+    dataset_name: str
+    split: str
+    class_name: str
+    requested_index: int = Field(ge=0)
+    resolved_index: int = Field(ge=0)
+    total_samples: int = Field(gt=0)
+    image_shape: List[int]
+    bbox_count: int = Field(default=0, ge=0)
+    annotation_coverage_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
+    source: Literal["annotation_xml", "none"] = "none"
+    image_data_url: str
+    mask_data_url: str
     relative_path: str
 
 
@@ -303,3 +359,16 @@ class DatasetResyncResponse(BaseModel):
     busi_rows_synced: int = Field(ge=0)
     ndt_rows_synced: int = Field(ge=0)
     industrial_rows_synced: int = Field(default=0, ge=0)
+
+
+class DatabaseTableStatus(BaseModel):
+    table_name: str
+    row_count: int = Field(ge=0)
+
+
+class DatabaseSchemaStatusResponse(BaseModel):
+    generated_at: datetime
+    database_url: str
+    alembic_current_revision: str | None = None
+    alembic_head_revision: str | None = None
+    tables: List[DatabaseTableStatus] = Field(default_factory=list)

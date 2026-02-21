@@ -12,6 +12,7 @@ from ultrasound.api.models.domain import AuthSessionRecord, JobRunRecord
 from ultrasound.api.models.schemas import (
     BusiTrainingRequest,
     BusiUploadResponse,
+    IndustrialTrainingRequest,
     IndustrialUploadResponse,
     JobEnqueueResponse,
     JobRunResponse,
@@ -62,6 +63,26 @@ def enqueue_dataset_resync_job(
 ) -> JobEnqueueResponse:
     """Queue asynchronous DB resync for BUSI/NDT/industrial tables."""
     job = container.job_queue_service.enqueue_dataset_resync(requested_by=current_user.username)
+    return JobEnqueueResponse(
+        job_id=job.id,
+        job_type=job.job_type,
+        status=job.status,
+        requested_by=job.requested_by,
+        submitted_at=job.submitted_at,
+    )
+
+
+@router.post("/learning/jobs/industrial-training", response_model=JobEnqueueResponse)
+def enqueue_industrial_training_job(
+    request: IndustrialTrainingRequest,
+    current_user: AuthSessionRecord = Depends(require_role("analyst")),
+    container: ApplicationContainer = Depends(get_container),
+) -> JobEnqueueResponse:
+    """Queue asynchronous industrial learning job for steel/NEU/casting datasets."""
+    job = container.job_queue_service.enqueue_industrial_training(
+        request=request,
+        requested_by=current_user.username,
+    )
     return JobEnqueueResponse(
         job_id=job.id,
         job_type=job.job_type,

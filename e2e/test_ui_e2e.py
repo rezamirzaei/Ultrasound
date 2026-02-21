@@ -26,6 +26,8 @@ def test_viewer_login_and_sidebar_navigation() -> None:
         page.wait_for_selector("text=Session", timeout=15000)
         page.click("a:has-text('NDT Explorer')")
         page.wait_for_selector("text=Available Samples", timeout=20000)
+        page.click("a:has-text('Industrial Lab')")
+        page.wait_for_selector("text=Industrial Learning Monitor", timeout=20000)
         page.click("a:has-text('Dashboard')")
         page.wait_for_selector("text=System Overview", timeout=15000)
 

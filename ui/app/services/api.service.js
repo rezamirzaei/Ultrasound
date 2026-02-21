@@ -243,6 +243,36 @@
         );
       };
 
+      this.getIndustrialSegmentationPreview = function (datasetName, split, className, sampleIndex) {
+        return unwrap(
+          $http.get(
+            baseUrl +
+              "/datasets/industrial/segmentation/" +
+              encodeURIComponent(datasetName) +
+              "/" +
+              encodeURIComponent(split) +
+              "/" +
+              encodeURIComponent(className) +
+              "/" +
+              encodeURIComponent(String(sampleIndex)),
+            withAuth()
+          )
+        );
+      };
+
+      this.getIndustrialTrainingLatest = function (datasetName) {
+        return unwrap(
+          $http.get(
+            baseUrl + "/datasets/industrial/training/latest",
+            withAuth({ params: { dataset_name: datasetName || "steel_defect" } })
+          )
+        );
+      };
+
+      this.runIndustrialTraining = function (payload) {
+        return unwrap($http.post(baseUrl + "/datasets/industrial/training/run", payload, withAuth()));
+      };
+
       this.getBusiSamplePreview = function (className, sampleIndex) {
         return unwrap(
           $http.get(
@@ -273,12 +303,20 @@
         return unwrap($http.post(baseUrl + "/learning/jobs/datasets-resync", {}, withAuth()));
       };
 
+      this.enqueueIndustrialTrainingJob = function (payload) {
+        return unwrap($http.post(baseUrl + "/learning/jobs/industrial-training", payload, withAuth()));
+      };
+
       this.listLearningJobs = function (limit) {
         return unwrap($http.get(baseUrl + "/learning/jobs", withAuth({ params: { limit: limit || 30 } })));
       };
 
       this.getLearningJob = function (jobId) {
         return unwrap($http.get(baseUrl + "/learning/jobs/" + encodeURIComponent(String(jobId)), withAuth()));
+      };
+
+      this.getDatabaseSchemaStatus = function () {
+        return unwrap($http.get(baseUrl + "/ops/database/schema-status", withAuth()));
       };
 
       this.uploadBusiSample = function (formData) {

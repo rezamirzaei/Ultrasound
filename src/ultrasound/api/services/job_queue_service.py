@@ -8,10 +8,11 @@ import time
 from typing import cast
 
 from ultrasound.api.models.domain import JobRunRecord
-from ultrasound.api.models.schemas import BusiTrainingRequest
+from ultrasound.api.models.schemas import BusiTrainingRequest, IndustrialTrainingRequest
 from ultrasound.api.repositories.job_repository import JobRepository
 from ultrasound.api.services.busi_training_service import BusiTrainingService
 from ultrasound.api.services.data_ingestion_service import DataIngestionService
+from ultrasound.api.services.industrial_training_service import IndustrialTrainingService
 from ultrasound.api.services.observability_service import ObservabilityService
 
 logger = logging.getLogger("inphase.jobs")
@@ -24,12 +25,14 @@ class JobQueueService:
         self,
         repository: JobRepository,
         busi_training_service: BusiTrainingService,
+        industrial_training_service: IndustrialTrainingService,
         data_ingestion_service: DataIngestionService,
         observability_service: ObservabilityService,
         poll_interval_seconds: float = 0.5,
     ) -> None:
         self.repository = repository
         self.busi_training_service = busi_training_service
+        self.industrial_training_service = industrial_training_service
         self.data_ingestion_service = data_ingestion_service
         self.observability_service = observability_service
         self.poll_interval_seconds = max(0.1, float(poll_interval_seconds))
@@ -79,6 +82,17 @@ class JobQueueService:
             payload={"trigger": "manual"},
         )
 
+    def enqueue_industrial_training(
+        self,
+        request: IndustrialTrainingRequest,
+        requested_by: str,
+    ) -> JobRunRecord:
+        return self.repository.enqueue(
+            job_type="industrial_training",
+            requested_by=requested_by,
+            payload=request.model_dump(mode="json"),
+        )
+
     def get_job(self, job_id: int) -> JobRunRecord | None:
         return self.repository.get_job(job_id)
 
@@ -100,20 +114,36 @@ class JobQueueService:
     def _execute_job(self, job: JobRunRecord) -> None:
         started = time.perf_counter()
         try:
+            result_payload: dict[str, object]
             if job.job_type == "busi_training":
-                request = BusiTrainingRequest.model_validate(job.payload)
-                training_result = self.busi_training_service.run_training(request)
+                busi_request = BusiTrainingRequest.model_validate(job.payload)
+                busi_training_result = self.busi_training_service.run_training(busi_request)
                 result_payload = {
-                    "run_id": training_result.run_id,
-                    "train_accuracy": training_result.train_accuracy,
-                    "test_accuracy": training_result.test_accuracy,
-                    "epochs": training_result.epochs,
-                    "train_samples": training_result.train_samples,
-                    "test_samples": training_result.test_samples,
+                    "run_id": busi_training_result.run_id,
+                    "train_accuracy": busi_training_result.train_accuracy,
+                    "test_accuracy": busi_training_result.test_accuracy,
+                    "epochs": busi_training_result.epochs,
+                    "train_samples": busi_training_result.train_samples,
+                    "test_samples": busi_training_result.test_samples,
                 }
             elif job.job_type == "dataset_resync":
                 resync_result = self.data_ingestion_service.resync_all()
                 result_payload = resync_result.model_dump(mode="json")
+            elif job.job_type == "industrial_training":
+                industrial_request = IndustrialTrainingRequest.model_validate(job.payload)
+                industrial_training_result = self.industrial_training_service.run_training(
+                    industrial_request
+                )
+                result_payload = {
+                    "run_id": industrial_training_result.run_id,
+                    "dataset_name": industrial_training_result.dataset_name,
+                    "train_accuracy": industrial_training_result.train_accuracy,
+                    "test_accuracy": industrial_training_result.test_accuracy,
+                    "epochs": industrial_training_result.epochs,
+                    "train_samples": industrial_training_result.train_samples,
+                    "test_samples": industrial_training_result.test_samples,
+                    "annotated_samples": industrial_training_result.annotated_samples,
+                }
             else:
                 raise ValueError(f"Unsupported job type '{job.job_type}'.")
 

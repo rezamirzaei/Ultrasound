@@ -42,14 +42,16 @@ class JobRepository:
 
         if status not in {"pending", "running", "completed", "failed"}:
             status = "failed"
-        if job_type not in {"busi_training", "dataset_resync"}:
+        if job_type not in {"busi_training", "dataset_resync", "industrial_training"}:
             job_type = "dataset_resync"
 
         submitted_at = row.submitted_at or datetime.now(tz=timezone.utc)
 
         return JobRunRecord(
             id=int(row.id),
-            job_type=cast(Literal["busi_training", "dataset_resync"], job_type),
+            job_type=cast(
+                Literal["busi_training", "dataset_resync", "industrial_training"], job_type
+            ),
             status=cast(Literal["pending", "running", "completed", "failed"], status),
             requested_by=str(row.requested_by),
             payload=payload,
@@ -62,7 +64,7 @@ class JobRepository:
 
     def enqueue(
         self,
-        job_type: Literal["busi_training", "dataset_resync"],
+        job_type: Literal["busi_training", "dataset_resync", "industrial_training"],
         requested_by: str,
         payload: dict[str, Any],
     ) -> JobRunRecord:

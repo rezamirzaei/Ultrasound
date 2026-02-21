@@ -1,0 +1,268 @@
+<section class="panel" ng-if="vm.loading">
+  <p>Loading industrial learning workspace...</p>
+</section>
+
+<section class="panel error" ng-if="vm.error">
+  <p>{{ vm.error }}</p>
+</section>
+
+<section class="panel" ng-if="!vm.loading">
+  <h3>Problem, Solution, Result</h3>
+  <p class="note">
+    Problem: industrial defect datasets are split across formats and are difficult to validate end-to-end.
+    Solution: unify steel/NEU/casting images in SQL, train from DB-backed splits, and expose segmentation previews
+    directly from annotations. Result: reproducible learning metrics, visible train/test curves, and inspectable
+    sample+mask outputs for QA.
+  </p>
+</section>
+
+<section class="panel" ng-if="!vm.loading">
+  <h3>Dataset Scope</h3>
+  <div class="class-chip-row">
+    <button
+      type="button"
+      class="chip"
+      ng-repeat="datasetName in vm.datasetOptions"
+      ng-class="{active: vm.selectedDataset === datasetName}"
+      ng-click="vm.selectDataset(datasetName)"
+    >
+      {{ datasetName }}
+      ({{ (vm.summary.totals_by_dataset && vm.summary.totals_by_dataset[datasetName]) || 0 }})
+    </button>
+  </div>
+
+  <div class="toolbar">
+    <label class="inline-field">
+      Split
+      <select ng-model="vm.sampleRequest.split" ng-options="split for split in vm.availableSplits"></select>
+    </label>
+    <label class="inline-field">
+      Class
+      <select ng-model="vm.sampleRequest.class_name" ng-options="className for className in vm.availableClasses"></select>
+    </label>
+    <label class="inline-field">
+      Sample Index
+      <input type="number" min="0" ng-model="vm.sampleRequest.sample_index" />
+    </label>
+    <button class="btn btn-muted" type="button" ng-click="vm.prevSample()" ng-disabled="vm.sampleLoading">
+      Previous
+    </button>
+    <button class="btn" type="button" ng-click="vm.nextSample()" ng-disabled="vm.sampleLoading">
+      Next
+    </button>
+    <button class="btn btn-muted" type="button" ng-click="vm.refreshSampleAndSegmentation()" ng-disabled="vm.sampleLoading">
+      {{ vm.sampleLoading ? 'Loading...' : 'Refresh Sample' }}
+    </button>
+  </div>
+  <p class="note signal-error" ng-if="vm.sampleError">{{ vm.sampleError }}</p>
+</section>
+
+<section class="grid-2" ng-if="vm.sample && !vm.loading">
+  <div class="panel">
+    <h3>Classification Sample</h3>
+    <img class="preview-image" ng-src="{{ vm.sample.image_data_url }}" alt="Industrial defect sample" />
+    <ul class="list compact">
+      <li><span>Dataset</span><strong>{{ vm.sample.dataset_name }}</strong></li>
+      <li><span>Split</span><strong>{{ vm.sample.split }}</strong></li>
+      <li><span>Class</span><strong>{{ vm.sample.class_name }}</strong></li>
+      <li><span>Resolved Index</span><strong>{{ vm.sample.resolved_index }}</strong></li>
+      <li><span>Total Samples</span><strong>{{ vm.sample.total_samples }}</strong></li>
+      <li><span>Annotation</span><strong>{{ vm.sample.has_annotation ? 'Yes' : 'No' }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="panel" ng-if="vm.segmentation">
+    <h3>Segmentation Preview</h3>
+    <img class="preview-image" ng-src="{{ vm.segmentation.mask_data_url }}" alt="Industrial annotation mask preview" />
+    <ul class="list compact">
+      <li><span>Source</span><strong>{{ vm.segmentation.source }}</strong></li>
+      <li><span>BBox Count</span><strong>{{ vm.segmentation.bbox_count }}</strong></li>
+      <li>
+        <span>Coverage Ratio</span>
+        <strong>{{ (vm.segmentation.annotation_coverage_ratio * 100) | number:2 }}%</strong>
+      </li>
+      <li><span>Relative Path</span><strong>{{ vm.segmentation.relative_path }}</strong></li>
+    </ul>
+  </div>
+</section>
+
+<section class="panel" ng-if="!vm.loading">
+  <h3>Industrial Learning Monitor (SQL)</h3>
+  <p class="note">
+    Classification runs use SQL-backed train/test splits. For NEU samples with annotations, segmentation metrics
+    report baseline IoU/Dice for annotation-driven masks.
+  </p>
+  <p class="note" ng-if="vm.jobNotice">{{ vm.jobNotice }}</p>
+
+  <div class="toolbar">
+    <label class="inline-field">
+      Epochs
+      <input type="number" min="2" max="100" ng-model="vm.trainingForm.epochs" ng-disabled="vm.trainingLoading || !vm.canTrain" />
+    </label>
+    <label class="inline-field">
+      Batch Size
+      <input type="number" min="4" max="256" ng-model="vm.trainingForm.batch_size" ng-disabled="vm.trainingLoading || !vm.canTrain" />
+    </label>
+    <label class="inline-field">
+      Learning Rate
+      <input type="number" min="0.0001" max="1" step="0.0001" ng-model="vm.trainingForm.learning_rate" ng-disabled="vm.trainingLoading || !vm.canTrain" />
+    </label>
+    <button class="btn btn-muted" type="button" ng-click="vm.refreshTraining()" ng-disabled="vm.trainingLoading">
+      {{ vm.trainingLoading ? 'Loading...' : 'Refresh Metrics' }}
+    </button>
+    <button class="btn" type="button" ng-if="vm.canTrain" ng-click="vm.queueTraining()" ng-disabled="vm.trainingLoading">
+      {{ vm.trainingLoading ? 'Queueing...' : 'Queue Training Job' }}
+    </button>
+  </div>
+  <p class="note signal-error" ng-if="vm.trainingError">{{ vm.trainingError }}</p>
+
+  <div class="metric-grid metric-grid-4" ng-if="vm.training">
+    <metric-tile label="Dataset" value="vm.training.dataset_name" tone="muted"></metric-tile>
+    <metric-tile label="Run ID" value="vm.training.run_id || 'n/a'" tone="muted"></metric-tile>
+    <metric-tile label="Train Accuracy" value="vm.formatPct(vm.training.train_accuracy)" tone="accent"></metric-tile>
+    <metric-tile label="Test Accuracy" value="vm.formatPct(vm.training.test_accuracy)" tone="accent"></metric-tile>
+    <metric-tile label="Train Samples" value="vm.training.train_samples"></metric-tile>
+    <metric-tile label="Test Samples" value="vm.training.test_samples"></metric-tile>
+    <metric-tile label="Annotated Samples" value="vm.training.annotated_samples"></metric-tile>
+    <metric-tile label="Storage" value="vm.training.storage | uppercase" tone="muted"></metric-tile>
+  </div>
+
+  <table class="result-table" ng-if="vm.training">
+    <thead>
+      <tr>
+        <th>Segmentation Metric</th>
+        <th>Train</th>
+        <th>Test</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>IoU</td>
+        <td>{{ vm.training.segmentation_iou_train == null ? 'N/A' : (vm.training.segmentation_iou_train | number:3) }}</td>
+        <td>{{ vm.training.segmentation_iou_test == null ? 'N/A' : (vm.training.segmentation_iou_test | number:3) }}</td>
+      </tr>
+      <tr>
+        <td>Dice</td>
+        <td>{{ vm.training.segmentation_dice_train == null ? 'N/A' : (vm.training.segmentation_dice_train | number:3) }}</td>
+        <td>{{ vm.training.segmentation_dice_test == null ? 'N/A' : (vm.training.segmentation_dice_test | number:3) }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="signal-card" ng-if="vm.trainingChart">
+    <svg class="signal-chart busi-curve-chart" viewBox="0 0 {{ vm.trainingChart.width }} {{ vm.trainingChart.height }}" preserveAspectRatio="none">
+      <line
+        ng-repeat="grid in vm.trainingChart.yGrid"
+        x1="40"
+        y1="{{ grid.y }}"
+        x2="{{ vm.trainingChart.width - 16 }}"
+        y2="{{ grid.y }}"
+        class="signal-baseline"
+      ></line>
+      <text ng-repeat="grid in vm.trainingChart.yGrid" x="4" y="{{ grid.y + 4 }}" class="signal-marker-label">
+        {{ grid.label }}
+      </text>
+
+      <path d="{{ vm.trainingChart.trainPath }}" class="busi-train-line"></path>
+      <path d="{{ vm.trainingChart.testPath }}" class="busi-test-line"></path>
+
+      <circle
+        ng-repeat="point in vm.trainingChart.trainPoints"
+        cx="{{ point.x }}"
+        cy="{{ point.y }}"
+        r="2.5"
+        class="busi-train-point"
+      ></circle>
+      <circle
+        ng-repeat="point in vm.trainingChart.testPoints"
+        cx="{{ point.x }}"
+        cy="{{ point.y }}"
+        r="2.5"
+        class="busi-test-point"
+      ></circle>
+
+      <text x="40" y="{{ vm.trainingChart.height - 8 }}" class="signal-wall-marker-label">
+        Epoch {{ vm.trainingChart.startEpoch }}
+      </text>
+      <text x="{{ vm.trainingChart.width - 78 }}" y="{{ vm.trainingChart.height - 8 }}" class="signal-wall-marker-label">
+        Epoch {{ vm.trainingChart.endEpoch }}
+      </text>
+    </svg>
+    <div class="toolbar busi-curve-legend">
+      <span><i class="legend-swatch train"></i> Train Accuracy</span>
+      <span><i class="legend-swatch test"></i> Test Accuracy</span>
+    </div>
+  </div>
+</section>
+
+<section class="panel" ng-if="vm.canTrain && !vm.loading">
+  <h3>Industrial Training Jobs</h3>
+  <div class="toolbar">
+    <button class="btn btn-muted" type="button" ng-click="vm.refreshJobs()" ng-disabled="vm.jobsLoading">
+      {{ vm.jobsLoading ? 'Loading Jobs...' : 'Refresh Jobs' }}
+    </button>
+  </div>
+  <p class="note signal-error" ng-if="vm.jobsError">{{ vm.jobsError }}</p>
+  <table class="result-table" ng-if="vm.jobs.length">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Status</th>
+        <th>Requested By</th>
+        <th>Submitted</th>
+        <th>Finished</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr ng-repeat="job in vm.jobs | limitTo:12">
+        <td>{{ job.job_id }}</td>
+        <td>{{ job.status }}</td>
+        <td>{{ job.requested_by }}</td>
+        <td>{{ job.submitted_at | date:'shortTime' }}</td>
+        <td>{{ job.finished_at ? (job.finished_at | date:'shortTime') : '-' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note" ng-if="!vm.jobs.length">No industrial training jobs submitted yet.</p>
+</section>
+
+<section class="panel" ng-if="vm.canTrain && !vm.loading">
+  <h3>Add New Industrial Data (SQL)</h3>
+  <p class="note">
+    Upload steel/NEU/casting images and optional annotations to extend learning datasets without filesystem sync.
+  </p>
+  <div class="toolbar">
+    <label class="inline-field">
+      Dataset
+      <select ng-model="vm.upload.dataset_name" ng-options="datasetName for datasetName in vm.datasetOptions"></select>
+    </label>
+    <label class="inline-field">
+      Split
+      <select ng-model="vm.upload.split" ng-options="split for split in vm.availableSplits"></select>
+    </label>
+    <label class="inline-field">
+      Class
+      <input type="text" ng-model="vm.upload.class_name" placeholder="crazing / def_front / rolled_scale" />
+    </label>
+  </div>
+  <div class="toolbar">
+    <label class="inline-field">
+      Image
+      <input id="industrial-lab-upload-image" type="file" accept="image/*" />
+    </label>
+    <label class="inline-field">
+      Annotation (Optional)
+      <input id="industrial-lab-upload-annotation" type="file" accept=".xml,.json,.txt" />
+    </label>
+    <button class="btn" type="button" ng-click="vm.uploadIndustrialSample()" ng-disabled="vm.uploadLoading">
+      {{ vm.uploadLoading ? 'Uploading...' : 'Upload Industrial Sample' }}
+    </button>
+  </div>
+  <p class="note signal-error" ng-if="vm.uploadError">{{ vm.uploadError }}</p>
+  <ul class="list compact" ng-if="vm.uploadResult">
+    <li><span>Sample ID</span><strong>{{ vm.uploadResult.sample_id }}</strong></li>
+    <li><span>Dataset</span><strong>{{ vm.uploadResult.dataset_name }}</strong></li>
+    <li><span>Split/Class</span><strong>{{ vm.uploadResult.split }} / {{ vm.uploadResult.class_name }}</strong></li>
+    <li><span>Total in Split+Class</span><strong>{{ vm.uploadResult.total_class_samples }}</strong></li>
+  </ul>
+</section>

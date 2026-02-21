@@ -51,28 +51,97 @@ def _create_ui_fixture(ui_dir: Path) -> None:
 
 def _create_industrial_fixture(data_dir: Path) -> None:
     """Create minimal industrial dataset folders for ORM sync tests."""
-    steel_image = data_dir / "steel_defect" / "NEU Metal Surface Defects Data" / "train" / "Crazing"
-    steel_image.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(np.full((32, 32), 120, dtype=np.uint8), mode="L").save(steel_image / "Cr_1.bmp")
-
-    neu_images = data_dir / "neu_surface" / "NEU-DET" / "train" / "images" / "crazing"
-    neu_annotations = data_dir / "neu_surface" / "NEU-DET" / "train" / "annotations"
-    neu_images.mkdir(parents=True, exist_ok=True)
-    neu_annotations.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(np.full((24, 24), 180, dtype=np.uint8), mode="L").save(
-        neu_images / "crazing_1.jpg"
+    steel_train_crazing = (
+        data_dir / "steel_defect" / "NEU Metal Surface Defects Data" / "train" / "Crazing"
     )
-    (neu_annotations / "crazing_1.xml").write_text(
-        "<annotation><object><name>crazing</name></object></annotation>",
-        encoding="utf-8",
+    steel_train_scale = (
+        data_dir / "steel_defect" / "NEU Metal Surface Defects Data" / "train" / "Rolled_In_Scale"
+    )
+    steel_valid_crazing = (
+        data_dir / "steel_defect" / "NEU Metal Surface Defects Data" / "valid" / "Crazing"
+    )
+    steel_train_crazing.mkdir(parents=True, exist_ok=True)
+    steel_train_scale.mkdir(parents=True, exist_ok=True)
+    steel_valid_crazing.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.full((32, 32), 120, dtype=np.uint8), mode="L").save(
+        steel_train_crazing / "Cr_1.bmp"
+    )
+    Image.fromarray(np.full((32, 32), 80, dtype=np.uint8), mode="L").save(
+        steel_train_scale / "RS_1.bmp"
+    )
+    Image.fromarray(np.full((32, 32), 135, dtype=np.uint8), mode="L").save(
+        steel_valid_crazing / "Cr_2.bmp"
     )
 
-    casting_image = (
+    neu_train_crazing = data_dir / "neu_surface" / "NEU-DET" / "train" / "images" / "crazing"
+    neu_train_inclusion = data_dir / "neu_surface" / "NEU-DET" / "train" / "images" / "inclusion"
+    neu_valid_crazing = data_dir / "neu_surface" / "NEU-DET" / "validation" / "images" / "crazing"
+    neu_valid_inclusion = (
+        data_dir / "neu_surface" / "NEU-DET" / "validation" / "images" / "inclusion"
+    )
+    neu_train_annotations = data_dir / "neu_surface" / "NEU-DET" / "train" / "annotations"
+    neu_valid_annotations = data_dir / "neu_surface" / "NEU-DET" / "validation" / "annotations"
+    neu_train_crazing.mkdir(parents=True, exist_ok=True)
+    neu_train_inclusion.mkdir(parents=True, exist_ok=True)
+    neu_valid_crazing.mkdir(parents=True, exist_ok=True)
+    neu_valid_inclusion.mkdir(parents=True, exist_ok=True)
+    neu_train_annotations.mkdir(parents=True, exist_ok=True)
+    neu_valid_annotations.mkdir(parents=True, exist_ok=True)
+
+    def _write_neu_case(image_path: Path, annotation_path: Path, fill_value: int) -> None:
+        Image.fromarray(np.full((24, 24), fill_value, dtype=np.uint8), mode="L").save(image_path)
+        annotation_path.write_text(
+            """
+<annotation>
+  <object>
+    <name>defect</name>
+    <bndbox>
+      <xmin>4</xmin>
+      <ymin>5</ymin>
+      <xmax>16</xmax>
+      <ymax>18</ymax>
+    </bndbox>
+  </object>
+</annotation>
+""".strip(),
+            encoding="utf-8",
+        )
+
+    _write_neu_case(
+        neu_train_crazing / "crazing_1.jpg", neu_train_annotations / "crazing_1.xml", 180
+    )
+    _write_neu_case(
+        neu_train_inclusion / "inclusion_1.jpg", neu_train_annotations / "inclusion_1.xml", 145
+    )
+    _write_neu_case(
+        neu_valid_crazing / "crazing_2.jpg", neu_valid_annotations / "crazing_2.xml", 170
+    )
+    _write_neu_case(
+        neu_valid_inclusion / "inclusion_2.jpg",
+        neu_valid_annotations / "inclusion_2.xml",
+        130,
+    )
+
+    casting_train_def = (
         data_dir / "casting_defect" / "casting_data" / "casting_data" / "train" / "def_front"
     )
-    casting_image.mkdir(parents=True, exist_ok=True)
+    casting_train_ok = (
+        data_dir / "casting_defect" / "casting_data" / "casting_data" / "train" / "ok_front"
+    )
+    casting_test_def = (
+        data_dir / "casting_defect" / "casting_data" / "casting_data" / "test" / "def_front"
+    )
+    casting_train_def.mkdir(parents=True, exist_ok=True)
+    casting_train_ok.mkdir(parents=True, exist_ok=True)
+    casting_test_def.mkdir(parents=True, exist_ok=True)
     Image.fromarray(np.full((28, 28), 200, dtype=np.uint8), mode="L").save(
-        casting_image / "cast_def_1.jpeg"
+        casting_train_def / "cast_def_1.jpeg"
+    )
+    Image.fromarray(np.full((28, 28), 80, dtype=np.uint8), mode="L").save(
+        casting_train_ok / "cast_ok_1.jpeg"
+    )
+    Image.fromarray(np.full((28, 28), 210, dtype=np.uint8), mode="L").save(
+        casting_test_def / "cast_def_2.jpeg"
     )
 
 
@@ -585,6 +654,77 @@ def test_industrial_summary_and_sample_preview(client: TestClient) -> None:
     assert neu_payload["has_annotation"] is True
 
 
+def test_industrial_training_and_segmentation_endpoints(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+
+    latest_before = client.get(
+        "/api/v1/datasets/industrial/training/latest",
+        params={"dataset_name": "neu_surface"},
+        headers=viewer_headers,
+    )
+    assert latest_before.status_code == 200
+    latest_before_payload = latest_before.json()
+    assert latest_before_payload["dataset_name"] == "neu_surface"
+    assert latest_before_payload["run_id"] is None
+    assert latest_before_payload["curve"] == []
+
+    segmentation_preview = client.get(
+        "/api/v1/datasets/industrial/segmentation/neu_surface/train/crazing/0",
+        headers=viewer_headers,
+    )
+    assert segmentation_preview.status_code == 200
+    seg_payload = segmentation_preview.json()
+    assert seg_payload["dataset_name"] == "neu_surface"
+    assert seg_payload["source"] == "annotation_xml"
+    assert seg_payload["bbox_count"] >= 1
+    assert seg_payload["mask_data_url"].startswith("data:image/png;base64,")
+
+    forbidden = client.post(
+        "/api/v1/datasets/industrial/training/run",
+        json={
+            "dataset_name": "neu_surface",
+            "epochs": 4,
+            "batch_size": 4,
+            "learning_rate": 0.02,
+        },
+        headers=viewer_headers,
+    )
+    assert forbidden.status_code == 403
+
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
+    run_response = client.post(
+        "/api/v1/datasets/industrial/training/run",
+        json={
+            "dataset_name": "neu_surface",
+            "epochs": 4,
+            "batch_size": 4,
+            "learning_rate": 0.02,
+        },
+        headers=analyst_headers,
+    )
+    assert run_response.status_code == 200
+    run_payload = run_response.json()
+    assert run_payload["run_id"] is not None
+    assert run_payload["dataset_name"] == "neu_surface"
+    assert run_payload["storage"] == "sql"
+    assert run_payload["train_samples"] > 0
+    assert run_payload["test_samples"] > 0
+    assert run_payload["annotated_samples"] >= 1
+    assert len(run_payload["curve"]) == 4
+    assert 0.0 <= run_payload["train_accuracy"] <= 1.0
+    assert 0.0 <= run_payload["test_accuracy"] <= 1.0
+
+    latest_after = client.get(
+        "/api/v1/datasets/industrial/training/latest",
+        params={"dataset_name": "neu_surface"},
+        headers=viewer_headers,
+    )
+    assert latest_after.status_code == 200
+    latest_after_payload = latest_after.json()
+    assert latest_after_payload["run_id"] == run_payload["run_id"]
+    assert latest_after_payload["curve"]
+
+
 def test_busi_training_endpoints(client: TestClient) -> None:
     viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
 
@@ -760,6 +900,50 @@ def test_async_learning_job_queue_runs_training(client: TestClient) -> None:
     assert latest_payload["run_id"] is not None
 
 
+def test_async_industrial_training_job_queue_runs_training(client: TestClient) -> None:
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
+
+    enqueue = client.post(
+        "/api/v1/learning/jobs/industrial-training",
+        json={
+            "dataset_name": "casting_defect",
+            "epochs": 3,
+            "batch_size": 4,
+            "learning_rate": 0.02,
+        },
+        headers=analyst_headers,
+    )
+    assert enqueue.status_code == 200
+    enqueue_payload = enqueue.json()
+    assert enqueue_payload["job_type"] == "industrial_training"
+    job_id = int(enqueue_payload["job_id"])
+
+    status_payload = None
+    for _ in range(80):
+        status_response = client.get(f"/api/v1/learning/jobs/{job_id}", headers=analyst_headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        if status_payload["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.1)
+
+    assert status_payload is not None
+    assert status_payload["status"] == "completed"
+    assert status_payload["result"] is not None
+    assert status_payload["result"]["dataset_name"] == "casting_defect"
+    assert status_payload["result"]["epochs"] == 3
+
+    latest = client.get(
+        "/api/v1/datasets/industrial/training/latest",
+        params={"dataset_name": "casting_defect"},
+        headers=analyst_headers,
+    )
+    assert latest.status_code == 200
+    latest_payload = latest.json()
+    assert latest_payload["run_id"] is not None
+    assert latest_payload["dataset_name"] == "casting_defect"
+
+
 def test_async_resync_job_queue_admin_only(client: TestClient) -> None:
     viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
     admin_headers = _auth_headers(client, username="admin", password="admin123")
@@ -784,6 +968,33 @@ def test_async_resync_job_queue_admin_only(client: TestClient) -> None:
     assert status_payload["status"] == "completed"
     assert status_payload["result"] is not None
     assert int(status_payload["result"]["busi_rows_synced"]) >= 0
+
+
+def test_ops_database_schema_status_admin_only(client: TestClient) -> None:
+    viewer_headers = _auth_headers(client, username="viewer", password="viewer123")
+    admin_headers = _auth_headers(client, username="admin", password="admin123")
+
+    forbidden = client.get("/api/v1/ops/database/schema-status", headers=viewer_headers)
+    assert forbidden.status_code == 403
+
+    # Touch industrial endpoint first so lazy SQL seeding is reflected in row counts.
+    summary = client.get("/api/v1/datasets/industrial/summary", headers=admin_headers)
+    assert summary.status_code == 200
+
+    response = client.get("/api/v1/ops/database/schema-status", headers=admin_headers)
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert "database_url" in payload
+    assert "alembic_current_revision" in payload
+    assert "alembic_head_revision" in payload
+    assert isinstance(payload["tables"], list)
+
+    table_counts = {row["table_name"]: row["row_count"] for row in payload["tables"]}
+    assert "industrial_samples" in table_counts
+    assert "industrial_training_runs" in table_counts
+    assert table_counts["industrial_samples"] >= 1
+    assert table_counts["industrial_training_runs"] >= 0
 
 
 def test_upload_endpoints_store_busi_and_industrial_samples_in_sql(client: TestClient) -> None:

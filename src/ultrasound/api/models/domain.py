@@ -221,6 +221,64 @@ class BusiTrainingRunRecord(BaseModel):
     notes: str | None = None
 
 
+class IndustrialTrainingSampleRecord(BaseModel):
+    """One industrial sample decoded from SQL storage for model training."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    sample_id: int = Field(ge=1)
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"]
+    class_name: str
+    label: int = Field(ge=0)
+    split: Literal["train", "test"]
+    image_rgb: np.ndarray
+    annotation_blob: bytes | None = None
+
+    @field_validator("image_rgb", mode="before")
+    @classmethod
+    def parse_industrial_training_rgb_image(cls, value: object) -> np.ndarray:
+        image = np.asarray(value, dtype=np.uint8)
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError("Industrial training image must be RGB with shape [H, W, 3]")
+        return image
+
+
+class IndustrialTrainingCurvePointRecord(BaseModel):
+    """One epoch point for industrial train/test curves."""
+
+    epoch: int = Field(ge=1)
+    train_accuracy: float = Field(ge=0.0, le=1.0)
+    test_accuracy: float = Field(ge=0.0, le=1.0)
+    train_loss: float = Field(ge=0.0)
+    test_loss: float = Field(ge=0.0)
+
+
+class IndustrialTrainingRunRecord(BaseModel):
+    """Persisted industrial training run summary."""
+
+    run_id: int | None = Field(default=None, ge=1)
+    created_at: datetime
+    dataset_name: Literal["steel_defect", "neu_surface", "casting_defect"]
+    epochs: int = Field(ge=1, le=200)
+    batch_size: int = Field(ge=1, le=1024)
+    learning_rate: float = Field(gt=0.0, le=1.0)
+    train_samples: int = Field(ge=1)
+    test_samples: int = Field(ge=1)
+    class_counts: Dict[str, int]
+    class_labels: list[str]
+    train_accuracy: float = Field(ge=0.0, le=1.0)
+    test_accuracy: float = Field(ge=0.0, le=1.0)
+    train_loss: float = Field(ge=0.0)
+    test_loss: float = Field(ge=0.0)
+    curve: list[IndustrialTrainingCurvePointRecord] = Field(default_factory=list)
+    annotated_samples: int = Field(default=0, ge=0)
+    segmentation_iou_train: float | None = Field(default=None, ge=0.0, le=1.0)
+    segmentation_iou_test: float | None = Field(default=None, ge=0.0, le=1.0)
+    segmentation_dice_train: float | None = Field(default=None, ge=0.0, le=1.0)
+    segmentation_dice_test: float | None = Field(default=None, ge=0.0, le=1.0)
+    notes: str | None = None
+
+
 class IndustrialSampleRecord(BaseModel):
     """Validated industrial defect sample from SQL storage."""
 
@@ -234,6 +292,7 @@ class IndustrialSampleRecord(BaseModel):
     total_samples: int = Field(gt=0)
     relative_path: str
     image_rgb: np.ndarray
+    annotation_blob: bytes | None = None
     has_annotation: bool = False
 
     @field_validator("image_rgb", mode="before")
@@ -274,7 +333,7 @@ class JobRunRecord(BaseModel):
     """Background job state persisted in SQL."""
 
     id: int = Field(ge=1)
-    job_type: Literal["busi_training", "dataset_resync"]
+    job_type: Literal["busi_training", "dataset_resync", "industrial_training"]
     status: Literal["pending", "running", "completed", "failed"]
     requested_by: str
     payload: dict[str, Any] = Field(default_factory=dict)

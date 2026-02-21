@@ -127,6 +127,19 @@ class IndustrialSampleORM(Base):
     )
 
 
+class IndustrialTrainingRunORM(Base):
+    __tablename__ = "industrial_training_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    dataset_name = Column(String(64), nullable=False)
+    train_accuracy = Column(Float, nullable=True)
+    test_accuracy = Column(Float, nullable=True)
+    payload_json = Column(Text, nullable=False)
+
+    __table_args__ = (Index("ix_industrial_training_runs_dataset_id", "dataset_name", "id"),)
+
+
 class ApiErrorEventORM(Base):
     __tablename__ = "api_error_events"
 

@@ -21,6 +21,8 @@
       vm.canTrain = ApiService.hasRole("analyst");
       vm.opsSummary = null;
       vm.opsRecent = [];
+      vm.schemaStatus = null;
+      vm.schemaError = null;
       vm.clientErrors = ApiService.getClientErrors();
       vm.training = null;
       vm.trainingChart = null;
@@ -361,6 +363,7 @@
         if (includeAdmin) {
           requests.push(ApiService.getOpsErrorSummary(24 * 60));
           requests.push(ApiService.getOpsErrorRecent(12));
+          requests.push(ApiService.getDatabaseSchemaStatus());
         }
 
         $q.all(requests)
@@ -379,6 +382,8 @@
             if (includeAdmin) {
               vm.opsSummary = responses[index++];
               vm.opsRecent = responses[index++];
+              vm.schemaStatus = responses[index++];
+              vm.schemaError = null;
             }
 
             vm.busiRows = Object.keys(vm.summary.busi_counts || {})
@@ -397,6 +402,10 @@
           })
           .catch(function (error) {
             vm.error = error.detail || "Failed to load dashboard summary";
+            if (includeAdmin) {
+              vm.schemaStatus = null;
+              vm.schemaError = error.detail || "Failed to load schema diagnostics";
+            }
           })
           .finally(function () {
             vm.loading = false;
