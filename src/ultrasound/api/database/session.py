@@ -6,9 +6,11 @@ from collections.abc import Generator
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Declarative base for all ORM models."""
 
 
 class DatabaseSessionManager:
