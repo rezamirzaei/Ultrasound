@@ -11,6 +11,7 @@
       vm.loading = true;
       vm.error = null;
       vm.summary = null;
+      vm.readiness = null;
       vm.ndtSamples = [];
       vm.busiRows = [];
 
@@ -22,10 +23,15 @@
         vm.loading = true;
         vm.error = null;
 
-        $q.all([ApiService.getDashboardSummary(), ApiService.listNdtSamples()])
+        $q.all([
+          ApiService.getDashboardSummary(),
+          ApiService.getDashboardReadiness(),
+          ApiService.listNdtSamples(),
+        ])
           .then(function (responses) {
-            vm.summary = responses[0].data;
-            vm.ndtSamples = responses[1].data.slice(0, 5);
+            vm.summary = responses[0];
+            vm.readiness = responses[1];
+            vm.ndtSamples = responses[2].slice(0, 5);
             vm.busiRows = Object.keys(vm.summary.busi_counts || {})
               .map(function (className) {
                 var count = vm.summary.busi_counts[className] || 0;
@@ -41,7 +47,7 @@
               });
           })
           .catch(function (error) {
-            vm.error = (error.data && error.data.detail) || "Failed to load dashboard summary";
+            vm.error = error.detail || "Failed to load dashboard summary";
           })
           .finally(function () {
             vm.loading = false;

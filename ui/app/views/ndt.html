@@ -54,5 +54,62 @@
         </tr>
       </tbody>
     </table>
+
+    <section class="signal-section" ng-if="vm.signal">
+      <div class="toolbar">
+        <label class="inline-field">
+          Chart Points
+          <input
+            type="number"
+            min="128"
+            max="4096"
+            step="64"
+            ng-model="vm.maxSignalPoints"
+            ng-disabled="vm.signalLoading"
+          />
+        </label>
+        <button class="btn btn-muted" type="button" ng-click="vm.refreshSignal()" ng-disabled="vm.signalLoading">
+          {{ vm.signalLoading ? 'Refreshing...' : 'Refresh Waveform' }}
+        </button>
+      </div>
+
+      <div class="signal-card">
+        <svg
+          class="signal-chart"
+          ng-if="vm.chart"
+          ng-attr-viewBox="0 0 {{ vm.chart.width }} {{ vm.chart.height }}"
+          preserveAspectRatio="none"
+        >
+          <line
+            x1="0"
+            ng-attr-y1="{{ vm.chart.baselineY }}"
+            ng-attr-x2="{{ vm.chart.width }}"
+            ng-attr-y2="{{ vm.chart.baselineY }}"
+            class="signal-baseline"
+          ></line>
+          <path ng-attr-d="{{ vm.chart.path }}" class="signal-line"></path>
+          <line
+            ng-repeat="marker in vm.chart.markers"
+            ng-attr-x1="{{ marker.x }}"
+            y1="0"
+            ng-attr-x2="{{ marker.x }}"
+            ng-attr-y2="{{ vm.chart.height }}"
+            class="signal-marker"
+          ></line>
+        </svg>
+      </div>
+
+      <ul class="list compact">
+        <li><span>Original Points</span><strong>{{ vm.signal.n_original_points }}</strong></li>
+        <li><span>Sampled Points</span><strong>{{ vm.signal.n_sampled_points }}</strong></li>
+        <li><span>Amplitude Min</span><strong>{{ vm.signal.stats.amplitude_min | number:4 }}</strong></li>
+        <li><span>Amplitude Max</span><strong>{{ vm.signal.stats.amplitude_max | number:4 }}</strong></li>
+        <li><span>Amplitude RMS</span><strong>{{ vm.signal.stats.amplitude_rms | number:4 }}</strong></li>
+        <li>
+          <span>Time Window (us)</span>
+          <strong>{{ vm.signal.stats.time_start_us | number:3 }} - {{ vm.signal.stats.time_end_us | number:3 }}</strong>
+        </li>
+      </ul>
+    </section>
   </div>
 </section>

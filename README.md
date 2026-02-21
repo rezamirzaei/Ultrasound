@@ -129,7 +129,14 @@ UI modules:
 - Dashboard: project summary + quick navigation
 - BUSI Explorer: browse images/masks by class and sample index
 - Preprocessing Lab: run Lee/Frost/CLAHE/ADMM-TV and compare metrics
-- NDT Explorer: inspect sample metadata and defect tables
+- NDT Explorer: inspect sample metadata, defect tables, and sampled RF waveforms
+
+Key API endpoints used by the UI:
+- `GET /api/v1/dashboard/summary`
+- `GET /api/v1/dashboard/readiness`
+- `GET /api/v1/datasets/busi/samples/{class_name}/{sample_index}`
+- `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
+- `POST /api/v1/preprocessing/preview`
 
 Run tests in Docker explicitly:
 

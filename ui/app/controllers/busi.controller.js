@@ -56,12 +56,12 @@
         vm.error = null;
 
         ApiService.getBusiSamplePreview(vm.selectedClass, vm.requestedIndex)
-          .then(function (response) {
-            vm.sample = response.data;
+          .then(function (data) {
+            vm.sample = data;
             vm.requestedIndex = vm.sample.resolved_index;
           })
           .catch(function (error) {
-            vm.error = (error.data && error.data.detail) || "Failed to load BUSI sample preview";
+            vm.error = error.detail || "Failed to load BUSI sample preview";
             vm.sample = null;
           })
           .finally(function () {
@@ -74,8 +74,8 @@
         vm.error = null;
 
         ApiService.getBusiCounts()
-          .then(function (response) {
-            vm.classCounts = response.data || {};
+          .then(function (data) {
+            vm.classCounts = data || {};
             vm.availableClasses = Object.keys(vm.classCounts).filter(function (className) {
               return vm.classCounts[className] > 0;
             });
@@ -92,7 +92,7 @@
           })
           .catch(function (error) {
             vm.loading = false;
-            vm.error = (error.data && error.data.detail) || "Failed to load BUSI class counts";
+            vm.error = error.detail || "Failed to load BUSI class counts";
           });
       }
 

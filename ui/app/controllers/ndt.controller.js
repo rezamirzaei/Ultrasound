@@ -3,16 +3,21 @@
 
   angular.module("inPhaseApp").controller("NdtController", [
     "ApiService",
-    function (ApiService) {
+    "$q",
+    function (ApiService, $q) {
       var vm = this;
 
       vm.loading = true;
       vm.detailLoading = false;
+      vm.signalLoading = false;
       vm.error = null;
       vm.samples = [];
       vm.searchQuery = "";
       vm.selectedName = null;
       vm.selected = null;
+      vm.signal = null;
+      vm.maxSignalPoints = 1024;
+      vm.chart = null;
 
       vm.filteredSamples = function () {
         if (!vm.searchQuery) {
@@ -24,20 +29,114 @@
         });
       };
 
+      vm.refreshSignal = function () {
+        if (!vm.selectedName) {
+          return;
+        }
+        loadSignal(vm.selectedName);
+      };
+
+      function buildSignalChart(signal) {
+        var width = 920;
+        var height = 260;
+        var padX = 16;
+        var padY = 16;
+        var xMin = signal.time_us[0];
+        var xMax = signal.time_us[signal.time_us.length - 1];
+        var yMin = signal.stats.amplitude_min;
+        var yMax = signal.stats.amplitude_max;
+
+        if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) {
+          yMin = -1;
+          yMax = 1;
+        }
+        if (Math.abs(yMax - yMin) < 1e-12) {
+          yMin -= 1.0;
+          yMax += 1.0;
+        }
+        if (Math.abs(xMax - xMin) < 1e-12) {
+          xMin = 0.0;
+          xMax = 1.0;
+        }
+
+        var plotWidth = width - padX * 2;
+        var plotHeight = height - padY * 2;
+
+        function toX(t) {
+          return padX + ((t - xMin) / (xMax - xMin)) * plotWidth;
+        }
+
+        function toY(v) {
+          return padY + (1.0 - (v - yMin) / (yMax - yMin)) * plotHeight;
+        }
+
+        var path = "";
+        for (var i = 0; i < signal.time_us.length; i += 1) {
+          var x = toX(signal.time_us[i]);
+          var y = toY(signal.rf[i]);
+          if (i === 0) {
+            path += "M " + x.toFixed(2) + " " + y.toFixed(2);
+          } else {
+            path += " L " + x.toFixed(2) + " " + y.toFixed(2);
+          }
+        }
+
+        var markers = (signal.defect_markers || []).map(function (marker) {
+          return {
+            x: toX(marker.two_way_time_us),
+            label:
+              marker.depth_mm.toFixed(2) + " mm | t=" + marker.two_way_time_us.toFixed(3) + " us",
+          };
+        });
+
+        return {
+          width: width,
+          height: height,
+          path: path,
+          baselineY: toY(0.0),
+          markers: markers,
+        };
+      }
+
+      function loadSignal(sampleName) {
+        vm.signalLoading = true;
+        ApiService.getNdtSignal(sampleName, vm.maxSignalPoints)
+          .then(function (data) {
+            vm.signal = data;
+            vm.chart = buildSignalChart(data);
+          })
+          .catch(function (error) {
+            vm.error = error.detail || "Failed to load NDT waveform preview";
+            vm.signal = null;
+            vm.chart = null;
+          })
+          .finally(function () {
+            vm.signalLoading = false;
+          });
+      }
+
       vm.loadDetail = function (sampleName) {
         vm.selectedName = sampleName;
         vm.detailLoading = true;
         vm.error = null;
+        vm.signal = null;
+        vm.chart = null;
 
-        ApiService.getNdtSample(sampleName)
-          .then(function (response) {
-            vm.selected = response.data;
+        $q.all([ApiService.getNdtSample(sampleName), ApiService.getNdtSignal(sampleName, vm.maxSignalPoints)])
+          .then(function (responses) {
+            vm.selected = responses[0];
+            vm.signal = responses[1];
+            vm.chart = buildSignalChart(vm.signal);
           })
           .catch(function (error) {
-            vm.error = (error.data && error.data.detail) || "Failed to load sample details";
+            vm.error = error.detail || "Failed to load sample details";
+            vm.selected = null;
+            vm.signal = null;
+            vm.chart = null;
           })
           .finally(function () {
             vm.detailLoading = false;
+            vm.signalLoading = false;
           });
       };
 
@@ -46,14 +145,14 @@
         vm.error = null;
 
         ApiService.listNdtSamples()
-          .then(function (response) {
-            vm.samples = response.data;
+          .then(function (data) {
+            vm.samples = data;
             if (vm.samples.length > 0) {
               vm.loadDetail(vm.samples[0].name);
             }
           })
           .catch(function (error) {
-            vm.error = (error.data && error.data.detail) || "Failed to load NDT sample list";
+            vm.error = error.detail || "Failed to load NDT sample list";
           })
           .finally(function () {
             vm.loading = false;

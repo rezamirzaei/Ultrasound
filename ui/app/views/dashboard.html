@@ -32,6 +32,24 @@
   </div>
 </section>
 
+<section ng-if="vm.readiness && !vm.loading" class="panel" ng-class="{error: vm.readiness.status !== 'ok'}">
+  <h3>System Readiness</h3>
+  <p class="note" ng-if="vm.readiness.status === 'ok'">
+    Data and core services are ready for interactive workflows.
+  </p>
+  <ul class="list compact" ng-if="vm.readiness.issues.length">
+    <li ng-repeat="issue in vm.readiness.issues">
+      <span>{{ issue }}</span>
+    </li>
+  </ul>
+  <div class="metric-grid metric-grid-4">
+    <metric-tile label="Status" value="vm.readiness.status | uppercase" tone="accent"></metric-tile>
+    <metric-tile label="NDT Samples" value="vm.readiness.ndt_samples" tone="muted"></metric-tile>
+    <metric-tile label="BUSI Ready Classes" value="vm.readiness.busi_available_classes.length"></metric-tile>
+    <metric-tile label="BUSI Missing Classes" value="vm.readiness.busi_missing_classes.length"></metric-tile>
+  </div>
+</section>
+
 <section ng-if="vm.summary && !vm.loading" class="panel">
   <h3>NDT Samples Snapshot</h3>
   <p class="note" ng-if="!vm.ndtSamples.length">No NDT samples found in <code>data/ascan_signals/ndt_samples</code>.</p>

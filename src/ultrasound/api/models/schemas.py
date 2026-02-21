@@ -21,6 +21,15 @@ class DashboardSummaryResponse(BaseModel):
     generated_at: datetime
 
 
+class DataReadinessResponse(BaseModel):
+    status: str
+    busi_available_classes: List[str]
+    busi_missing_classes: List[str]
+    ndt_samples: int
+    issues: List[str]
+    generated_at: datetime
+
+
 class NdtSampleSummary(BaseModel):
     name: str
     n_points: int
@@ -33,6 +42,30 @@ class NdtSampleSummary(BaseModel):
 class NdtSampleDetail(NdtSampleSummary):
     description: str
     defects: List[dict]
+
+
+class NdtSignalStats(BaseModel):
+    amplitude_min: float
+    amplitude_max: float
+    amplitude_rms: float
+    time_start_us: float
+    time_end_us: float
+
+
+class NdtDefectMarker(BaseModel):
+    depth_mm: float
+    amplitude: float
+    two_way_time_us: float
+
+
+class NdtSignalPreview(BaseModel):
+    sample_name: str
+    n_original_points: int
+    n_sampled_points: int
+    time_us: List[float]
+    rf: List[float]
+    stats: NdtSignalStats
+    defect_markers: List[NdtDefectMarker]
 
 
 class BusiSamplePreview(BaseModel):

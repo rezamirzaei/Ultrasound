@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container
 from ultrasound.api.models.schemas import (
     BusiSamplePreview,
     DashboardSummaryResponse,
+    DataReadinessResponse,
     NdtSampleDetail,
     NdtSampleSummary,
+    NdtSignalPreview,
 )
 
 router = APIRouter(tags=["dashboard"])
@@ -24,6 +26,14 @@ def get_dashboard_summary(
 ) -> DashboardSummaryResponse:
     """Return top-level counters consumed by dashboard UI."""
     return container.dashboard_service.get_summary()
+
+
+@router.get("/dashboard/readiness", response_model=DataReadinessResponse)
+def get_dashboard_readiness(
+    container: ApplicationContainer = Depends(get_container),
+) -> DataReadinessResponse:
+    """Return dataset/system readiness diagnostics for operators."""
+    return container.dashboard_service.get_data_readiness()
 
 
 @router.get("/datasets/busi/counts", response_model=dict[str, int])
@@ -63,3 +73,20 @@ def get_ndt_sample(
         return container.dashboard_service.get_ndt_sample_detail(sample_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/datasets/ndt/samples/{sample_name}/signal", response_model=NdtSignalPreview)
+def get_ndt_sample_signal(
+    sample_name: str,
+    max_points: int = Query(default=1024, ge=128, le=4096),
+    container: ApplicationContainer = Depends(get_container),
+) -> NdtSignalPreview:
+    """Return sampled RF waveform data for plotting in UI dashboards."""
+    try:
+        return container.dashboard_service.get_ndt_signal_preview(
+            sample_name, max_points=max_points
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

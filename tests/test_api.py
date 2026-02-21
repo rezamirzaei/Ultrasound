@@ -103,6 +103,18 @@ def test_dashboard_summary_endpoint(client: TestClient) -> None:
     assert payload["busi_total"] >= 0
 
 
+def test_dashboard_readiness_endpoint(client: TestClient) -> None:
+    response = client.get("/api/v1/dashboard/readiness")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"ok", "warning"}
+    assert isinstance(payload["issues"], list)
+    assert payload["ndt_samples"] >= 0
+    assert isinstance(payload["busi_available_classes"], list)
+    assert isinstance(payload["busi_missing_classes"], list)
+
+
 def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     list_response = client.get("/api/v1/datasets/ndt/samples")
 
@@ -116,6 +128,18 @@ def test_ndt_sample_listing_and_detail(client: TestClient) -> None:
     detail = detail_response.json()
     assert detail["name"] == samples[0]["name"]
     assert detail["n_points"] > 0
+
+    signal_response = client.get(
+        f"/api/v1/datasets/ndt/samples/{samples[0]['name']}/signal",
+        params={"max_points": 256},
+    )
+    assert signal_response.status_code == 200
+    signal = signal_response.json()
+    assert signal["sample_name"] == samples[0]["name"]
+    assert signal["n_original_points"] >= signal["n_sampled_points"] > 0
+    assert len(signal["time_us"]) == signal["n_sampled_points"]
+    assert len(signal["rf"]) == signal["n_sampled_points"]
+    assert "stats" in signal
 
 
 def test_busi_sample_preview_endpoint(client: TestClient) -> None:

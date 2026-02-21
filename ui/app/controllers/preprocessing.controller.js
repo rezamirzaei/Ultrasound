@@ -90,13 +90,12 @@
         vm.error = null;
 
         ApiService.previewPreprocessing(vm.form)
-          .then(function (response) {
-            vm.preview = response.data;
+          .then(function (data) {
+            vm.preview = data;
             vm.sortedMethods = sortMethods(vm.preview.methods, vm.sortMetric);
           })
           .catch(function (error) {
-            vm.error =
-              (error.data && error.data.detail) || "Failed to run preprocessing preview";
+            vm.error = error.detail || "Failed to run preprocessing preview";
           })
           .finally(function () {
             vm.loading = false;
@@ -105,8 +104,8 @@
 
       function init() {
         ApiService.getBusiCounts()
-          .then(function (response) {
-            vm.classCounts = response.data || {};
+          .then(function (data) {
+            vm.classCounts = data || {};
             vm.availableClasses = Object.keys(vm.classCounts).filter(function (className) {
               return vm.classCounts[className] > 0;
             });
@@ -120,7 +119,7 @@
             vm.run();
           })
           .catch(function (error) {
-            vm.error = (error.data && error.data.detail) || "Failed to load BUSI class counts";
+            vm.error = error.detail || "Failed to load BUSI class counts";
           });
       }
 
