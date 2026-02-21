@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -72,12 +71,37 @@ class DatasetRepository:
             return float(default)
 
     def _build_defect_records(self, defects_obj: Any) -> list[NdtDefectRecord]:
+        """Parse defect data from numpy files.
+
+        Handles multiple storage formats:
+        - 2D float array of shape (N, 2): rows are [depth_m, amplitude]
+        - List of dicts with 'depth_m' and 'amplitude' keys
+        - List of tuples/lists of (depth_m, amplitude)
+        - Object arrays with mixed content
+        """
+        arr = np.asarray(defects_obj)
+
+        # Fast path: 2D numeric array with shape (N, 2)
+        if arr.ndim == 2 and arr.shape[1] >= 2 and np.issubdtype(arr.dtype, np.number):
+            records: list[NdtDefectRecord] = []
+            for row in arr:
+                depth = float(row[0]) if np.isfinite(row[0]) else None
+                amp = float(row[1]) if np.isfinite(row[1]) else None
+                if depth is not None or amp is not None:
+                    records.append(NdtDefectRecord(depth_m=depth, amplitude=amp))
+            return records
+
+        # Empty array
+        if arr.size == 0:
+            return []
+
+        # General case: convert to Python list and iterate
         try:
-            defects_raw = np.asarray(defects_obj, dtype=object).tolist()
+            defects_raw = arr.tolist()
             if not isinstance(defects_raw, list):
                 defects_raw = [defects_raw]
         except Exception:
-            defects_raw = []
+            return []
 
         defects: list[NdtDefectRecord] = []
         for item in defects_raw:
@@ -92,9 +116,8 @@ class DatasetRepository:
                     amplitude=item[1],
                 )
             else:
-                record = NdtDefectRecord()
+                continue
 
-            # Keep only entries that carry at least one finite scalar.
             if record.depth_m is not None or record.amplitude is not None:
                 defects.append(record)
         return defects

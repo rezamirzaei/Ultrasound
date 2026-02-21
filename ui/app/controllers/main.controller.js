@@ -4,8 +4,9 @@
   angular.module("inPhaseApp").controller("MainController", [
     "$location",
     "$rootScope",
+    "$scope",
     "ApiService",
-    function ($location, $rootScope, ApiService) {
+    function ($location, $rootScope, $scope, ApiService) {
       var vm = this;
 
       vm.apiBase = ApiService.getBaseUrl();
@@ -14,6 +15,13 @@
 
       vm.isActive = function (path) {
         return $location.path() === path;
+      };
+
+      vm.navigateTo = function (path) {
+        $location.path(path);
+        if (!$scope.$$phase) {
+          $scope.$apply();
+        }
       };
 
       var pageMap = {

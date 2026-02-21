@@ -52,7 +52,7 @@
       <tbody>
         <tr ng-repeat="defect in vm.selected.defects">
           <td>{{$index + 1}}</td>
-          <td>{{ defect.depth_m * 1000 | number:3 }}</td>
+          <td>{{ defect.depth_m == null ? 'N/A' : (defect.depth_m * 1000 | number:3) }}</td>
           <td>{{ defect.amplitude == null ? 'N/A' : (defect.amplitude | number:3) }}</td>
         </tr>
       </tbody>
@@ -91,14 +91,20 @@
             class="signal-baseline"
           ></line>
           <path ng-attr-d="{{ vm.chart.path }}" class="signal-line"></path>
-          <line
-            ng-repeat="marker in vm.chart.markers"
-            ng-attr-x1="{{ marker.x }}"
-            y1="0"
-            ng-attr-x2="{{ marker.x }}"
-            ng-attr-y2="{{ vm.chart.height }}"
-            class="signal-marker"
-          ></line>
+          <g ng-repeat="marker in vm.chart.markers">
+            <line
+              ng-attr-x1="{{ marker.x }}"
+              y1="0"
+              ng-attr-x2="{{ marker.x }}"
+              ng-attr-y2="{{ vm.chart.height }}"
+              class="signal-marker"
+            ></line>
+            <text
+              ng-attr-x="{{ marker.x + 4 }}"
+              y="14"
+              class="signal-marker-label"
+            >{{ marker.label }}</text>
+          </g>
         </svg>
       </div>
 
@@ -109,10 +115,30 @@
         <li><span>Amplitude Max</span><strong>{{ vm.signal.stats.amplitude_max | number:4 }}</strong></li>
         <li><span>Amplitude RMS</span><strong>{{ vm.signal.stats.amplitude_rms | number:4 }}</strong></li>
         <li>
-          <span>Time Window (us)</span>
-          <strong>{{ vm.signal.stats.time_start_us | number:3 }} - {{ vm.signal.stats.time_end_us | number:3 }}</strong>
+          <span>Time Window (µs)</span>
+          <strong>{{ vm.signal.stats.time_start_us | number:3 }} – {{ vm.signal.stats.time_end_us | number:3 }}</strong>
         </li>
+        <li><span>Defect Markers</span><strong>{{ vm.signal.defect_markers.length }}</strong></li>
       </ul>
+
+      <table class="result-table" ng-if="vm.signal.defect_markers.length">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Depth (mm)</th>
+            <th>Amplitude</th>
+            <th>Two-way Time (µs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr ng-repeat="marker in vm.signal.defect_markers">
+            <td>{{ $index + 1 }}</td>
+            <td>{{ marker.depth_mm | number:3 }}</td>
+            <td>{{ marker.amplitude == null ? 'N/A' : (marker.amplitude | number:3) }}</td>
+            <td>{{ marker.two_way_time_us | number:4 }}</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <p class="note signal-error" ng-if="vm.signalError">{{ vm.signalError }}</p>

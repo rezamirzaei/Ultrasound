@@ -21,10 +21,10 @@
           <p>Ultrasound Control Room</p>
         </div>
         <nav>
-          <a ng-class="{active: main.isActive('/dashboard')}" href="#/dashboard">Dashboard</a>
-          <a ng-class="{active: main.isActive('/busi')}" href="#/busi">BUSI Explorer</a>
-          <a ng-class="{active: main.isActive('/preprocessing')}" href="#/preprocessing">Preprocessing Lab</a>
-          <a ng-class="{active: main.isActive('/ndt')}" href="#/ndt">NDT Explorer</a>
+          <a ng-class="{active: main.isActive('/dashboard')}" href="" ng-click="main.navigateTo('/dashboard')">Dashboard</a>
+          <a ng-class="{active: main.isActive('/busi')}" href="" ng-click="main.navigateTo('/busi')">BUSI Explorer</a>
+          <a ng-class="{active: main.isActive('/preprocessing')}" href="" ng-click="main.navigateTo('/preprocessing')">Preprocessing Lab</a>
+          <a ng-class="{active: main.isActive('/ndt')}" href="" ng-click="main.navigateTo('/ndt')">NDT Explorer</a>
         </nav>
         <div class="sidebar-footer">
           <span>REST API</span>

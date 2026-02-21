@@ -82,10 +82,11 @@
         }
 
         var markers = (signal.defect_markers || []).map(function (marker) {
+          var ampStr = marker.amplitude != null ? " | A=" + marker.amplitude.toFixed(3) : "";
           return {
             x: toX(marker.two_way_time_us),
             label:
-              marker.depth_mm.toFixed(2) + " mm | t=" + marker.two_way_time_us.toFixed(3) + " us",
+              marker.depth_mm.toFixed(2) + " mm | t=" + marker.two_way_time_us.toFixed(3) + " µs" + ampStr,
           };
         });
 
