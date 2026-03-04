@@ -17,16 +17,22 @@ COPY alembic.ini ./
 COPY alembic/ ./alembic/
 COPY src/ ./src/
 COPY main.py ./
+COPY scripts/ ./scripts/
 COPY ui/ ./ui/
 
 RUN python -m pip install --upgrade pip \
     && pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple \
         "torch==2.2.2" "torchvision==0.17.2" \
-    && pip install .
+    && pip install ".[yolo]"
+
+# Ensure data and outputs directories exist for volume mounts.
+RUN mkdir -p /app/data /app/outputs /app/models
 
 # Run as non-root user.
 RUN useradd --create-home --shell /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
+
+EXPOSE 8000
 
 CMD ["python", "-m", "ultrasound.api"]
 
