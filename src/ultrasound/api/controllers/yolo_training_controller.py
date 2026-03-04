@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -14,17 +17,19 @@ from ultrasound.api.models.schemas import (
     YoloTrainRequest,
     YoloTrainResponse,
 )
+from ultrasound.api.services.yolo_trainer import (
+    YoloDatasetPreparer,
+    YoloTrainer,
+    YoloTrainingConfig,
+)
 from ultrasound.data.liver_dataset import (
     CLASS_NAMES,
     create_synthetic_liver_dataset,
     resolve_liver_paths,
     summarize_dataset,
 )
-from ultrasound.api.services.yolo_trainer import (
-    YoloDatasetPreparer,
-    YoloTrainer,
-    YoloTrainingConfig,
-)
+
+logger = logging.getLogger("inphase.yolo.training_controller")
 
 router = APIRouter(
     tags=["yolo-training"],
@@ -103,6 +108,14 @@ def train_liver_yolo(
         raise HTTPException(status_code=501, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Training failed: {exc}") from exc
+
+    # Copy best weights to a well-known artifact location.
+    if result.best_weights and result.best_weights.exists():
+        artifact_dir = container.config.project_root / "models"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        dest = artifact_dir / "liver_yolo_best.pt"
+        shutil.copy2(result.best_weights, dest)
+        logger.info("Copied best weights to %s", dest)
 
     return YoloTrainResponse(
         generated_at=datetime.now(tz=timezone.utc),

@@ -25,10 +25,70 @@
     <li ng-if="vm.status.dataset.summary.images"><span>Images</span><strong>{{ vm.status.dataset.summary.images }}</strong></li>
     <li ng-if="vm.status.dataset.summary.total_boxes"><span>Bounding Boxes</span><strong>{{ vm.status.dataset.summary.total_boxes }}</strong></li>
     <li><span>Classes</span><strong>{{ (vm.status.class_names || []).join(', ') || 'n/a' }}</strong></li>
+    <li><span>Trained Weights</span>
+      <strong ng-if="vm.status.trained_weights" class="signal-ok">Available</strong>
+      <strong ng-if="!vm.status.trained_weights" class="signal-error">Not trained yet</strong>
+    </li>
+    <li><span>Default Model</span><strong>{{ vm.status.default_model }}</strong></li>
   </ul>
   <p class="note" ng-if="!vm.status.dataset.ready">
     Download the dataset first: <code>python scripts/download_liver_ultrasound_detection.py</code>
   </p>
+</section>
+
+<!-- Training Panel -->
+<section class="panel" ng-if="!vm.loading && vm.status && vm.status.dataset.ready && vm.status.yolo.available">
+  <h3>Fine-Tune YOLO on Liver Data</h3>
+  <p class="note" ng-if="vm.status.trained_weights">
+    Trained weights found at <code>{{ vm.status.trained_weights }}</code>.
+    You can re-train to update them.
+  </p>
+  <p class="note" ng-if="!vm.status.trained_weights">
+    No fine-tuned weights detected. Train the model so predictions use liver-specific classes (liver, mass) instead of
+    generic pretrained classes (e.g. cat).
+  </p>
+  <div class="toolbar" ng-if="vm.canTrain">
+    <label class="inline-field">
+      Epochs
+      <input type="number" ng-model="vm.trainForm.epochs" min="1" max="500" step="1" style="width:60px" />
+    </label>
+    <label class="inline-field">
+      Batch
+      <input type="number" ng-model="vm.trainForm.batch_size" min="1" max="128" step="1" style="width:55px" />
+    </label>
+    <label class="inline-field">
+      Freeze
+      <input type="number" ng-model="vm.trainForm.freeze_layers" min="0" max="50" step="1" style="width:50px" />
+    </label>
+    <label class="inline-field">
+      LR
+      <input type="number" ng-model="vm.trainForm.learning_rate" min="0.0001" max="1" step="0.001" style="width:70px" />
+    </label>
+    <button class="btn" type="button" ng-click="vm.startTraining()" ng-disabled="vm.trainingLoading">
+      {{ vm.trainingLoading ? 'Training...' : 'Start Training' }}
+    </button>
+  </div>
+  <p class="note" ng-if="!vm.canTrain">Training requires the <strong>analyst</strong> role.</p>
+  <p class="note signal-error" ng-if="vm.trainingError">{{ vm.trainingError }}</p>
+
+  <div ng-if="vm.trainingResult">
+    <h4>Training Result</h4>
+    <ul class="list compact">
+      <li><span>Epochs</span><strong>{{ vm.trainingResult.epochs_completed }}</strong></li>
+      <li ng-if="vm.trainingResult.best_weights"><span>Best Weights</span><strong>{{ vm.trainingResult.best_weights }}</strong></li>
+      <li ng-if="vm.trainingResult.run_dir"><span>Run Dir</span><strong>{{ vm.trainingResult.run_dir }}</strong></li>
+    </ul>
+    <div ng-if="vm.trainingResult.metrics">
+      <table class="mini-table">
+        <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr ng-repeat="(key, val) in vm.trainingResult.metrics">
+            <td>{{ key }}</td><td>{{ val | number:4 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 <section class="panel" ng-if="!vm.loading && vm.status && vm.status.dataset.ready">
@@ -80,7 +140,7 @@
   <div class="toolbar">
     <label class="inline-field">
       Model
-      <input type="text" ng-model="vm.predictForm.model" style="width:140px" />
+      <input type="text" ng-model="vm.predictForm.model" style="width:260px" />
     </label>
     <label class="inline-field">
       Confidence

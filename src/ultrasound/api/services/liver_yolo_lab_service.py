@@ -1,12 +1,15 @@
 """Liver Ultrasound Detection lab service.
 
 Provides sample browsing, bbox annotation loading, and YOLO inference
-for the Kaggle liver ultrasound dataset.
+for the Kaggle liver ultrasound dataset.  When fine-tuned weights exist
+(from a training run), they are automatically used as the default model.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -30,6 +33,16 @@ from ultrasound.data.liver_dataset import (
     summarize_dataset,
 )
 
+logger = logging.getLogger("inphase.yolo.liver_lab")
+
+# Well-known locations where training saves best weights (checked in order).
+_TRAINED_WEIGHTS_CANDIDATES: tuple[str, ...] = (
+    "models/liver_yolo_best.pt",
+    "outputs/yolo_runs/liver_detection/weights/best.pt",
+    "outputs/api/yolo_runs/liver_detection/weights/best.pt",
+    "runs/detect/outputs/yolo_runs/liver_detection/weights/best.pt",
+)
+
 
 class LiverYoloLabService:
     """Browse liver ultrasound samples and run YOLO inference."""
@@ -47,6 +60,25 @@ class LiverYoloLabService:
     def _paths(self) -> LiverDatasetPaths:
         return resolve_liver_paths(self._config.data_dir)
 
+    # -- Trained weights resolution -------------------------------------------
+
+    def resolve_trained_weights(self) -> Path | None:
+        """Return the path to fine-tuned liver YOLO weights, or *None*."""
+        root = self._config.project_root
+        for candidate in _TRAINED_WEIGHTS_CANDIDATES:
+            path = root / candidate
+            if path.is_file():
+                return path
+        return None
+
+    @property
+    def default_model(self) -> str:
+        """Best available model: fine-tuned weights when present, else generic."""
+        weights = self.resolve_trained_weights()
+        if weights is not None:
+            return str(weights)
+        return "yolo11n.pt"
+
     # -- Status ---------------------------------------------------------------
 
     def dataset_status(self) -> LiverDatasetStatusResponse:
@@ -61,11 +93,14 @@ class LiverYoloLabService:
 
     def lab_status(self) -> LiverYoloLabStatusResponse:
         """Combined YOLO backend + dataset readiness."""
+        trained = self.resolve_trained_weights()
         return LiverYoloLabStatusResponse(
             generated_at=datetime.now(tz=timezone.utc),
             yolo=self._yolo_service.status(),
             dataset=self.dataset_status(),
             class_names=list(CLASS_NAMES),
+            trained_weights=str(trained) if trained else None,
+            default_model=self.default_model,
         )
 
     # -- Sample browsing ------------------------------------------------------
@@ -153,8 +188,19 @@ class LiverYoloLabService:
         sample_index: int,
         request: YoloPredictRequest,
     ) -> YoloPredictResponse:
-        """Run YOLO inference on a liver sample."""
+        """Run YOLO inference on a liver sample.
+
+        When the request does not specify a model (or uses the generic
+        pretrained weights), automatically substitute fine-tuned liver
+        weights if they are available.
+        """
         image_rgb = self.load_image_rgb(category, sample_index)
+
+        # Auto-substitute trained weights when the user hasn't overridden.
+        generic_models = {"yolo11n.pt", "yolov8n.pt", ""}
+        if (request.model or "").strip() in generic_models:
+            request = request.model_copy(update={"model": self.default_model})
+
         return self._yolo_service.predict(image_rgb=image_rgb, request=request)
 
 

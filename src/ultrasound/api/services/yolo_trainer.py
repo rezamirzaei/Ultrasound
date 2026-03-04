@@ -273,7 +273,13 @@ class YoloTrainer:
 
         results = model.train(**train_kwargs)
 
+        # Resolve the actual run directory.  Ultralytics may relocate it
+        # (e.g. under ``runs/detect/``) when the project path is relative.
         run_dir = Path(config.project_dir) / config.run_name
+        save_dir = getattr(results, "save_dir", None)
+        if save_dir is not None:
+            run_dir = Path(str(save_dir))
+
         best_weights = run_dir / "weights" / "best.pt"
         last_weights = run_dir / "weights" / "last.pt"
 

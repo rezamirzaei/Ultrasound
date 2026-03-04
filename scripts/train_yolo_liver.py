@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shutil
 import sys
 from pathlib import Path
 
@@ -169,6 +170,13 @@ def main() -> None:
     print("\n✓ YOLO liver detection training pipeline complete.")
     print(f"  Best weights: {result.best_weights}")
     print(f"  Run dir:      {result.run_dir}")
+
+    # Copy best weights to the well-known artifact location.
+    if result.best_weights and result.best_weights.exists():
+        artifact_dest = _project_root / "models" / "liver_yolo_best.pt"
+        artifact_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(result.best_weights, artifact_dest)
+        print(f"  Artifact:     {artifact_dest}")
 
 
 if __name__ == "__main__":

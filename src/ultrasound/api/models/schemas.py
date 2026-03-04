@@ -485,6 +485,8 @@ class LiverYoloLabStatusResponse(BaseModel):
     yolo: YoloStatusResponse
     dataset: LiverDatasetStatusResponse
     class_names: List[str] = Field(default_factory=list)
+    trained_weights: str | None = None
+    default_model: str = "yolo11n.pt"
 
 
 class LiverSampleBbox(BaseModel):

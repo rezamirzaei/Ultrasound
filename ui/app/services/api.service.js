@@ -355,6 +355,14 @@
         );
       };
 
+      this.getLiverDatasetStatus = function () {
+        return unwrap($http.get(baseUrl + "/yolo/liver/dataset/status", withAuth()));
+      };
+
+      this.trainLiverYolo = function (payload) {
+        return unwrap($http.post(baseUrl + "/yolo/liver/train", payload, withAuth()));
+      };
+
       this.getBusiYoloStatus = function () {
         return unwrap($http.get(baseUrl + "/yolo/ultrasound/busi/status", withAuth()));
       };
