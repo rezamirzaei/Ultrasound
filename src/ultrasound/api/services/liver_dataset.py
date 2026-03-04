@@ -1,28 +1,43 @@
 """Liver Ultrasound Detection dataset utilities.
 
 Handles downloading, parsing, and preparing the Kaggle
-*liver-ultrasound-detection* competition dataset for YOLO training.
+*Annotated Ultrasound Liver Images Dataset* for YOLO detection training.
 
-Competition: https://www.kaggle.com/competitions/liver-ultrasound-detection/data
+Dataset: https://www.kaggle.com/datasets/orvile/annotated-ultrasound-liver-images-dataset
 
 The dataset provides:
-  - ``train/`` images  (ultrasound scans)
-  - ``train.csv``      (bounding-box annotations: image_id, x_min, y_min, x_max, y_max)
-  - ``test/`` images   (no labels — competition hold-out)
+  - ``{Benign,Malignant,Normal}/image/``          — ultrasound JPGs
+  - ``{Benign,Malignant,Normal}/segmentation/liver/`` — liver polygon JSONs
+  - ``{Benign,Malignant,Normal}/segmentation/mass/``  — mass polygon JSONs (Benign/Malignant only)
+
+For **detection** we derive tight bounding boxes from the polygon annotations.
+Classes: 0=liver, 1=mass
 """
 
 from __future__ import annotations
 
 import csv
+import json
 import logging
+import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger("inphase.yolo.liver")
 
-# The competition has a single detection class: "liver".
-CLASS_NAMES: list[str] = ["liver"]
+# Detection classes derived from the polygon annotations.
+CLASS_NAMES: list[str] = ["liver", "mass"]
+
+# Public Kaggle dataset URL (no auth needed).
+DATASET_URL = (
+    "https://www.kaggle.com/api/v1/datasets/download/"
+    "orvile/annotated-ultrasound-liver-images-dataset"
+)
+
+# The ZIP extracts everything under a numbered subfolder.
+_INNER_DIR = "7272660"
+_CATEGORIES = ("Benign", "Malignant", "Normal")
 
 
 @dataclass(frozen=True)
@@ -30,28 +45,33 @@ class LiverDatasetPaths:
     """Resolved paths for the liver ultrasound detection dataset."""
 
     root: Path
-    train_images_dir: Path
-    test_images_dir: Path
-    annotations_csv: Path
+
+    @property
+    def data_root(self) -> Path:
+        """Path to the inner numbered directory containing {Benign,Malignant,Normal}."""
+        inner = self.root / _INNER_DIR
+        if inner.is_dir():
+            return inner
+        return self.root
 
     @property
     def is_ready(self) -> bool:
-        return (
-            self.train_images_dir.is_dir()
-            and self.annotations_csv.is_file()
-            and any(self.train_images_dir.iterdir())
-        )
+        dr = self.data_root
+        return any((dr / cat / cat / "image").is_dir() for cat in _CATEGORIES)
+
+    @property
+    def annotations_csv(self) -> Path:
+        return self.root / "annotations.csv"
+
+    @property
+    def train_images_dir(self) -> Path:
+        """Convenience — points to the flat images dir created by prepare_flat_images."""
+        return self.root / "images_flat"
 
 
 def resolve_liver_paths(data_dir: Path) -> LiverDatasetPaths:
     """Build expected paths under ``data_dir/liver_ultrasound_detection/``."""
-    root = data_dir / "liver_ultrasound_detection"
-    return LiverDatasetPaths(
-        root=root,
-        train_images_dir=root / "train",
-        test_images_dir=root / "test",
-        annotations_csv=root / "train.csv",
-    )
+    return LiverDatasetPaths(root=data_dir / "liver_ultrasound_detection")
 
 
 # ---------------------------------------------------------------------------
@@ -59,67 +79,168 @@ def resolve_liver_paths(data_dir: Path) -> LiverDatasetPaths:
 # ---------------------------------------------------------------------------
 
 def download_liver_dataset(dest_dir: Path, *, force: bool = False) -> LiverDatasetPaths:
-    """Download the competition data from Kaggle (requires credentials).
+    """Download the liver ultrasound dataset from Kaggle (no auth required).
 
-    Credentials: ``~/.kaggle/kaggle.json`` or env vars ``KAGGLE_USERNAME``
-    / ``KAGGLE_KEY``.
-
-    If a ZIP file is already present in *dest_dir*, it will be extracted
-    without re-downloading (unless *force* is ``True``).
+    The dataset (~74 MB) is downloaded, extracted, and polygon annotations
+    are converted to a bounding-box CSV.
     """
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
+    paths = LiverDatasetPaths(root=dest_dir)
 
-    paths = LiverDatasetPaths(
-        root=dest_dir,
-        train_images_dir=dest_dir / "train",
-        test_images_dir=dest_dir / "test",
-        annotations_csv=dest_dir / "train.csv",
-    )
-
-    # Fast path: already extracted.
     if paths.is_ready and not force:
         logger.info("Dataset already present at %s", dest_dir)
+        _ensure_annotations_csv(paths)
+        _ensure_flat_images(paths)
         return paths
 
-    # Check for a pre-placed ZIP.
-    zip_candidates = sorted(dest_dir.glob("*.zip"))
-    if zip_candidates and not force:
-        _extract_zip(zip_candidates[0], dest_dir)
-        return paths
+    zip_path = dest_dir / "dataset.zip"
 
-    _download_from_kaggle(dest_dir, force=force)
+    # Download
+    if not zip_path.exists() or force:
+        logger.info("Downloading liver ultrasound dataset (~74 MB) ...")
+        _download_file(DATASET_URL, zip_path)
+        logger.info("Downloaded %s (%.1f MB)", zip_path.name, zip_path.stat().st_size / 1e6)
+
+    # Extract
+    logger.info("Extracting ...")
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(dest_dir)
+    logger.info("Extracted to %s", dest_dir)
+
+    # Build CSV annotations from polygon JSONs
+    _ensure_annotations_csv(paths)
+    _ensure_flat_images(paths)
     return paths
 
 
-def _download_from_kaggle(dest_dir: Path, *, force: bool) -> None:
-    try:
-        from kaggle.api.kaggle_api_extended import KaggleApi
-    except ImportError as exc:
-        raise SystemExit(
-            "Kaggle API not installed. Run: pip install kaggle\n"
-            "Then set up credentials: https://github.com/Kaggle/kaggle-cli/blob/main/docs/README.md#authentication"
-        ) from exc
-
-    api = KaggleApi()
-    api.authenticate()
-
-    logger.info("Downloading liver-ultrasound-detection from Kaggle …")
-    api.competition_download_files(
-        "liver-ultrasound-detection",
-        path=str(dest_dir),
-        force=bool(force),
-        quiet=False,
-    )
-
-    for zp in sorted(dest_dir.glob("*.zip")):
-        _extract_zip(zp, dest_dir)
+def _download_file(url: str, dest: Path) -> None:
+    req = urllib.request.Request(url, headers={"User-Agent": "inPhase-ultrasound-toolkit/1.0"})
+    with urllib.request.urlopen(req, timeout=600) as resp, dest.open("wb") as fh:
+        total = int(resp.headers.get("Content-Length", 0))
+        downloaded = 0
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            fh.write(chunk)
+            downloaded += len(chunk)
+            if total:
+                pct = downloaded / total * 100
+                logger.info("  %.0f%% (%.1f / %.1f MB)", pct, downloaded / 1e6, total / 1e6)
 
 
-def _extract_zip(zip_path: Path, dest_dir: Path) -> None:
-    logger.info("Extracting %s → %s", zip_path.name, dest_dir)
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(dest_dir)
+# ---------------------------------------------------------------------------
+# Convert polygon JSONs → bounding-box CSV
+# ---------------------------------------------------------------------------
+
+def _polygon_to_bbox(polygon: list[list[float]]) -> tuple[float, float, float, float]:
+    """Convert polygon [[x,y], ...] to (x_min, y_min, x_max, y_max)."""
+    xs = [pt[0] for pt in polygon]
+    ys = [pt[1] for pt in polygon]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _ensure_annotations_csv(paths: LiverDatasetPaths) -> Path:
+    """Build ``annotations.csv`` from the polygon JSON files."""
+    csv_path = paths.annotations_csv
+    if csv_path.exists():
+        return csv_path
+
+    logger.info("Building annotations.csv from polygon JSONs ...")
+    data_root = paths.data_root
+    rows: list[dict[str, str]] = []
+
+    for category in _CATEGORIES:
+        cat_dir = data_root / category / category
+        image_dir = cat_dir / "image"
+        liver_dir = cat_dir / "segmentation" / "liver"
+        mass_dir = cat_dir / "segmentation" / "mass"
+
+        if not image_dir.is_dir():
+            continue
+
+        for img_path in sorted(image_dir.glob("*")):
+            if not img_path.is_file():
+                continue
+            stem = img_path.stem
+            image_id = f"{category}_{stem}"
+
+            # Liver bbox (class_id=0)
+            liver_json = liver_dir / f"{stem}.json"
+            if liver_json.exists():
+                try:
+                    polygon = json.loads(liver_json.read_text(encoding="utf-8"))
+                    x_min, y_min, x_max, y_max = _polygon_to_bbox(polygon)
+                    rows.append({
+                        "image_id": image_id,
+                        "x_min": f"{x_min:.2f}",
+                        "y_min": f"{y_min:.2f}",
+                        "x_max": f"{x_max:.2f}",
+                        "y_max": f"{y_max:.2f}",
+                        "class_id": "0",
+                        "category": category,
+                    })
+                except (json.JSONDecodeError, IndexError, KeyError):
+                    logger.warning("Skipping bad liver JSON: %s", liver_json)
+
+            # Mass bbox (class_id=1) — only Benign/Malignant have masses
+            mass_json = mass_dir / f"{stem}.json"
+            if mass_json.exists():
+                try:
+                    polygon = json.loads(mass_json.read_text(encoding="utf-8"))
+                    x_min, y_min, x_max, y_max = _polygon_to_bbox(polygon)
+                    rows.append({
+                        "image_id": image_id,
+                        "x_min": f"{x_min:.2f}",
+                        "y_min": f"{y_min:.2f}",
+                        "x_max": f"{x_max:.2f}",
+                        "y_max": f"{y_max:.2f}",
+                        "class_id": "1",
+                        "category": category,
+                    })
+                except (json.JSONDecodeError, IndexError, KeyError):
+                    logger.warning("Skipping bad mass JSON: %s", mass_json)
+
+    fieldnames = ["image_id", "x_min", "y_min", "x_max", "y_max", "class_id", "category"]
+    with csv_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    logger.info("Wrote %d annotation rows to %s", len(rows), csv_path)
+    return csv_path
+
+
+def _ensure_flat_images(paths: LiverDatasetPaths) -> Path:
+    """Copy images into a single flat directory with unique names.
+
+    The YOLO preparer expects all images in one folder.
+    Creates ``images_flat/`` with files like ``Benign_63.jpg``.
+    """
+    import shutil
+
+    flat_dir = paths.train_images_dir
+    if flat_dir.is_dir() and any(flat_dir.iterdir()):
+        return flat_dir
+
+    flat_dir.mkdir(parents=True, exist_ok=True)
+    data_root = paths.data_root
+    count = 0
+
+    for category in _CATEGORIES:
+        image_dir = data_root / category / category / "image"
+        if not image_dir.is_dir():
+            continue
+        for img_path in sorted(image_dir.glob("*")):
+            if not img_path.is_file():
+                continue
+            dest = flat_dir / f"{category}_{img_path.name}"
+            shutil.copy2(img_path, dest)
+            count += 1
+
+    logger.info("Copied %d images to %s", count, flat_dir)
+    return flat_dir
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +248,7 @@ def _extract_zip(zip_path: Path, dest_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def load_annotations_csv(csv_path: Path) -> dict[str, list[dict[str, float]]]:
-    """Parse ``train.csv`` → ``{image_id: [{x_min, y_min, x_max, y_max, class_id}]}``."""
+    """Parse ``annotations.csv`` → ``{image_id: [{x_min, y_min, x_max, y_max, class_id}]}``."""
     annotations: dict[str, list[dict[str, float]]] = {}
     with csv_path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
@@ -138,7 +259,7 @@ def load_annotations_csv(csv_path: Path) -> dict[str, list[dict[str, float]]]:
                 "y_min": float(row["y_min"]),
                 "x_max": float(row["x_max"]),
                 "y_max": float(row["y_max"]),
-                "class_id": 0,  # single-class: liver
+                "class_id": int(row.get("class_id", 0)),
             })
     return annotations
 
@@ -147,31 +268,39 @@ def summarize_dataset(paths: LiverDatasetPaths) -> dict[str, int | str]:
     """Quick summary of the dataset on disk."""
     summary: dict[str, int | str] = {"root": str(paths.root)}
 
-    if paths.train_images_dir.is_dir():
-        train_images = list(paths.train_images_dir.iterdir())
-        summary["train_images"] = len([f for f in train_images if f.is_file()])
+    flat_dir = paths.train_images_dir
+    if flat_dir.is_dir():
+        summary["images"] = sum(1 for f in flat_dir.iterdir() if f.is_file())
     else:
-        summary["train_images"] = 0
+        # Count from nested structure
+        total = 0
+        for cat in _CATEGORIES:
+            img_dir = paths.data_root / cat / cat / "image"
+            if img_dir.is_dir():
+                total += sum(1 for f in img_dir.iterdir() if f.is_file())
+        summary["images"] = total
 
-    if paths.test_images_dir.is_dir():
-        test_images = list(paths.test_images_dir.iterdir())
-        summary["test_images"] = len([f for f in test_images if f.is_file()])
-    else:
-        summary["test_images"] = 0
-
-    if paths.annotations_csv.is_file():
-        annotations = load_annotations_csv(paths.annotations_csv)
+    csv_path = paths.annotations_csv
+    if csv_path.is_file():
+        annotations = load_annotations_csv(csv_path)
         summary["annotated_images"] = len(annotations)
         summary["total_boxes"] = sum(len(v) for v in annotations.values())
+        summary["liver_boxes"] = sum(
+            sum(1 for b in v if int(b["class_id"]) == 0) for v in annotations.values()
+        )
+        summary["mass_boxes"] = sum(
+            sum(1 for b in v if int(b["class_id"]) == 1) for v in annotations.values()
+        )
     else:
         summary["annotated_images"] = 0
         summary["total_boxes"] = 0
 
+    summary["classes"] = ", ".join(CLASS_NAMES)
     return summary
 
 
 # ---------------------------------------------------------------------------
-# Synthetic / demo data for development without Kaggle credentials
+# Synthetic / demo data for development
 # ---------------------------------------------------------------------------
 
 def create_synthetic_liver_dataset(dest_dir: Path, *, n_samples: int = 30) -> LiverDatasetPaths:
@@ -184,62 +313,45 @@ def create_synthetic_liver_dataset(dest_dir: Path, *, n_samples: int = 30) -> Li
     from PIL import Image
 
     dest_dir = Path(dest_dir)
-    train_dir = dest_dir / "train"
-    test_dir = dest_dir / "test"
-    train_dir.mkdir(parents=True, exist_ok=True)
-    test_dir.mkdir(parents=True, exist_ok=True)
+    flat_dir = dest_dir / "images_flat"
+    flat_dir.mkdir(parents=True, exist_ok=True)
 
     rng = np.random.RandomState(42)
     rows: list[dict[str, str]] = []
 
     for i in range(n_samples):
         w, h = rng.randint(256, 513), rng.randint(256, 513)
-        # Simulate ultrasound-like texture: dark with speckle noise.
         base = rng.randint(20, 60, size=(h, w), dtype=np.uint8)
         noise = rng.normal(0, 15, size=(h, w)).astype(np.int16)
         img_arr = np.clip(base.astype(np.int16) + noise, 0, 255).astype(np.uint8)
 
-        # Draw a brighter "liver" region.
+        # Liver region
         x1 = rng.randint(10, w // 2)
         y1 = rng.randint(10, h // 2)
         x2 = rng.randint(w // 2 + 10, w - 5)
         y2 = rng.randint(h // 2 + 10, h - 5)
         img_arr[y1:y2, x1:x2] = np.clip(
-            img_arr[y1:y2, x1:x2].astype(np.int16) + rng.randint(40, 80),
-            0, 255,
+            img_arr[y1:y2, x1:x2].astype(np.int16) + rng.randint(40, 80), 0, 255,
         ).astype(np.uint8)
 
         image_id = f"synth_{i:04d}"
-        img_path = train_dir / f"{image_id}.png"
-        Image.fromarray(img_arr, mode="L").convert("RGB").save(img_path)
+        Image.fromarray(img_arr, mode="L").convert("RGB").save(flat_dir / f"{image_id}.png")
 
         rows.append({
             "image_id": image_id,
-            "x_min": str(x1),
-            "y_min": str(y1),
-            "x_max": str(x2),
-            "y_max": str(y2),
+            "x_min": str(x1), "y_min": str(y1),
+            "x_max": str(x2), "y_max": str(y2),
+            "class_id": "0", "category": "Synthetic",
         })
 
-    # A few test images (no labels).
-    for i in range(5):
-        w, h = 320, 320
-        img_arr = rng.randint(20, 80, size=(h, w), dtype=np.uint8)
-        img_path = test_dir / f"synth_test_{i:04d}.png"
-        Image.fromarray(img_arr, mode="L").convert("RGB").save(img_path)
-
-    csv_path = dest_dir / "train.csv"
+    csv_path = dest_dir / "annotations.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=["image_id", "x_min", "y_min", "x_max", "y_max"])
+        writer = csv.DictWriter(
+            fh, fieldnames=["image_id", "x_min", "y_min", "x_max", "y_max", "class_id", "category"]
+        )
         writer.writeheader()
         writer.writerows(rows)
 
-    logger.info("Created synthetic liver dataset: %d train, 5 test at %s", n_samples, dest_dir)
-
-    return LiverDatasetPaths(
-        root=dest_dir,
-        train_images_dir=train_dir,
-        test_images_dir=test_dir,
-        annotations_csv=csv_path,
-    )
+    logger.info("Created synthetic liver dataset: %d samples at %s", n_samples, dest_dir)
+    return LiverDatasetPaths(root=dest_dir)
 

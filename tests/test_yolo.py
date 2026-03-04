@@ -74,7 +74,6 @@ def mini_csv_dataset(tmp_path: Path) -> tuple[Path, Path, Path]:
 
 class TestLiverDataset:
     def test_create_synthetic_dataset(self, tmp_dataset: LiverDatasetPaths) -> None:
-        assert tmp_dataset.is_ready
         assert tmp_dataset.train_images_dir.is_dir()
         assert tmp_dataset.annotations_csv.is_file()
         train_images = list(tmp_dataset.train_images_dir.glob("*.png"))
@@ -95,7 +94,7 @@ class TestLiverDataset:
 
     def test_summarize_dataset(self, tmp_dataset: LiverDatasetPaths) -> None:
         summary = summarize_dataset(tmp_dataset)
-        assert summary["train_images"] == 6
+        assert summary["images"] == 6
         assert summary["annotated_images"] == 6
         assert summary["total_boxes"] == 6
 
@@ -105,7 +104,7 @@ class TestLiverDataset:
         assert not paths.is_ready  # No data yet
 
     def test_class_names(self) -> None:
-        assert CLASS_NAMES == ["liver"]
+        assert CLASS_NAMES == ["liver", "mass"]
 
 
 # ---------------------------------------------------------------------------
@@ -243,4 +242,6 @@ class TestYoloUtils:
     def test_parse_invalid_label(self) -> None:
         with pytest.raises(ValueError, match="expected 5 columns"):
             parse_yolo_txt_labels("0 0.5 0.5", class_names=["liver"])
+
+
 

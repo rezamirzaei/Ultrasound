@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
-"""Download the Kaggle Liver Ultrasound Detection competition data.
+"""Download the Liver Ultrasound Detection dataset from Kaggle.
 
-Competition: https://www.kaggle.com/competitions/liver-ultrasound-detection/data
+Dataset: https://www.kaggle.com/datasets/orvile/annotated-ultrasound-liver-images-dataset
 
-Authentication (one of):
-  1. Place credentials in ``~/.kaggle/kaggle.json``
-  2. Set env vars ``KAGGLE_USERNAME`` and ``KAGGLE_KEY``
+This dataset is publicly downloadable (no Kaggle credentials needed).
+It contains 735 annotated liver ultrasound images (Benign/Malignant/Normal)
+with polygon segmentation masks that are converted to bounding boxes.
 
-If no credentials are available, use ``--synthetic`` to generate a small
-demo dataset for smoke-testing the training pipeline.
+Usage:
+  python scripts/download_liver_ultrasound_detection.py
+  python scripts/download_liver_ultrasound_detection.py --force
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
-# Ensure the project ``src/`` is importable when running as a script.
 _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root / "src"))
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
 from ultrasound.api.services.liver_dataset import (
-    create_synthetic_liver_dataset,
     download_liver_dataset,
     summarize_dataset,
 )
@@ -37,30 +39,15 @@ def main() -> None:
         help="Destination directory",
     )
     parser.add_argument("--force", action="store_true", help="Force re-download")
-    parser.add_argument(
-        "--synthetic",
-        action="store_true",
-        help="Generate a small synthetic dataset (no Kaggle credentials needed)",
-    )
-    parser.add_argument(
-        "--n-samples",
-        type=int,
-        default=30,
-        help="Number of synthetic samples to create (only with --synthetic)",
-    )
     args = parser.parse_args()
 
     dest = Path(args.dest)
+    print(f"Downloading liver ultrasound dataset to {dest} ...")
 
-    if args.synthetic:
-        print(f"Creating synthetic liver ultrasound dataset at {dest} ...")
-        paths = create_synthetic_liver_dataset(dest, n_samples=args.n_samples)
-    else:
-        print(f"Downloading liver-ultrasound-detection to {dest} ...")
-        paths = download_liver_dataset(dest, force=args.force)
+    paths = download_liver_dataset(dest, force=args.force)
 
     summary = summarize_dataset(paths)
-    print("\nDataset summary:")
+    print("\n✓ Dataset ready! Summary:")
     for key, value in summary.items():
         print(f"  {key}: {value}")
 

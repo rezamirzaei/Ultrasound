@@ -49,8 +49,14 @@ data/neu_surface/
 data/ndt_ground_truth/
 data/phase_retrieval/
 data/ascan_signals/
+data/liver_ultrasound_detection/
+data/liver_yolo/
 data/*.sqlite3
 data/*.db
+
+# YOLO weights and run outputs
+*.pt
+runs/
 
 # Coverage reports
 htmlcov/
