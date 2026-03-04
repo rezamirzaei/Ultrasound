@@ -12,6 +12,7 @@ from .media_service import MediaService
 from .ndt_detection_service import NdtDetectionService
 from .observability_service import ObservabilityService
 from .preprocessing_service import PreprocessingService
+from .yolo_trainer import YoloDatasetPreparer, YoloTrainer, YoloTrainingConfig
 
 __all__ = [
     "AuthService",
@@ -26,4 +27,7 @@ __all__ = [
     "NdtDetectionService",
     "ObservabilityService",
     "PreprocessingService",
+    "YoloDatasetPreparer",
+    "YoloTrainer",
+    "YoloTrainingConfig",
 ]
