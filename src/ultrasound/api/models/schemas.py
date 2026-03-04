@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
@@ -386,3 +386,131 @@ class DatabaseSchemaStatusResponse(BaseModel):
     alembic_current_revision: str | None = None
     alembic_head_revision: str | None = None
     tables: List[DatabaseTableStatus] = Field(default_factory=list)
+
+
+class YoloStatusResponse(BaseModel):
+    available: bool
+    backend: str
+    default_models: List[str] = Field(default_factory=list)
+
+
+class BusiYoloModelStatus(BaseModel):
+    """Status for the recommended BUSI ultrasound YOLO weights used by the UI lab."""
+
+    model_id: str
+    source_url: str
+    local_path: str
+    downloaded: bool
+    sha256: str | None = None
+    size_bytes: int | None = Field(default=None, ge=0)
+    downloaded_at: datetime | None = None
+
+
+class BusiYoloLabStatusResponse(BaseModel):
+    generated_at: datetime
+    yolo: YoloStatusResponse
+    model: BusiYoloModelStatus
+    yolo_class_names: List[str] = Field(default_factory=list)
+
+
+class FieldYoloMetadata(BaseModel):
+    """Real-world field capture metadata for YOLO-friendly image records."""
+
+    asset_id: str = Field(min_length=2, max_length=128)
+    location_name: str | None = Field(default=None, max_length=128)
+    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    inspector: str | None = Field(default=None, max_length=128)
+    sensor: Literal["phone", "drone", "camera", "other"] = "camera"
+    class_names: List[str] = Field(default_factory=lambda: ["anomaly"], min_length=1)
+    notes: str | None = Field(default=None, max_length=1000)
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FieldYoloLabel(BaseModel):
+    """One YOLO-format label row (normalized xywh)."""
+
+    class_id: int = Field(ge=0)
+    class_name: str | None = None
+    x_center: float = Field(ge=0.0, le=1.0)
+    y_center: float = Field(ge=0.0, le=1.0)
+    width: float = Field(gt=0.0, le=1.0)
+    height: float = Field(gt=0.0, le=1.0)
+
+
+class FieldYoloRecordManifest(BaseModel):
+    record_id: str
+    created_at: datetime
+    metadata: FieldYoloMetadata
+    image_filename: str
+    stored_image: str
+    labels_filename: str | None = None
+    stored_labels: str | None = None
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
+class FieldYoloRecordSummary(BaseModel):
+    record_id: str
+    created_at: datetime
+    asset_id: str
+    location_name: str | None = None
+    captured_at: datetime
+    has_labels: bool = False
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
+class FieldYoloRecordDetail(BaseModel):
+    record_id: str
+    created_at: datetime
+    metadata: FieldYoloMetadata
+    image_filename: str
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    image_data_url: str
+    labels: List[FieldYoloLabel] = Field(default_factory=list)
+    raw_labels: str | None = None
+
+
+class YoloPredictRequest(BaseModel):
+    model: str = Field(default="yolov8n.pt", min_length=1, max_length=256)
+    confidence: float = Field(default=0.25, ge=0.0, le=1.0)
+    iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
+    image_size: int = Field(default=640, ge=160, le=2048)
+    max_detections: int = Field(default=100, ge=1, le=1000)
+
+
+class YoloXyxyBox(BaseModel):
+    x1: float = Field(ge=0.0)
+    y1: float = Field(ge=0.0)
+    x2: float = Field(ge=0.0)
+    y2: float = Field(ge=0.0)
+
+
+class BusiYoloSampleResponse(BaseModel):
+    """BUSI sample preview augmented with derived YOLO labels from the segmentation mask."""
+
+    sample: BusiSamplePreview
+    yolo_class_names: List[str] = Field(default_factory=list)
+    yolo_labels: List[FieldYoloLabel] = Field(default_factory=list)
+    raw_yolo_labels: str | None = None
+    bbox_xyxy: YoloXyxyBox | None = None
+
+
+class YoloDetection(BaseModel):
+    class_id: int
+    class_name: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    bbox: YoloXyxyBox
+
+
+class YoloPredictResponse(BaseModel):
+    generated_at: datetime
+    model: str
+    image_shape: List[int]
+    detections: List[YoloDetection] = Field(default_factory=list)
+    annotated_image_data_url: str
+    backend: str
+    notes: str | None = None

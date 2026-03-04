@@ -48,6 +48,9 @@ notebooks = [
     "jupyter>=1.0.0",
     "kaggle>=1.5.0",
 ]
+yolo = [
+    "ultralytics>=8.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/rezamirzaei/ultrasound-imaging-toolkit"

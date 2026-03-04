@@ -319,6 +319,83 @@
         return unwrap($http.get(baseUrl + "/ops/database/schema-status", withAuth()));
       };
 
+      this.getYoloStatus = function () {
+        return unwrap($http.get(baseUrl + "/yolo/status", withAuth()));
+      };
+
+      this.listFieldYoloRecords = function (limit) {
+        return unwrap($http.get(baseUrl + "/yolo/field/records", withAuth({ params: { limit: limit || 50 } })));
+      };
+
+      this.getFieldYoloRecord = function (recordId) {
+        return unwrap($http.get(baseUrl + "/yolo/field/records/" + encodeURIComponent(recordId), withAuth()));
+      };
+
+      this.uploadFieldYoloRecord = function (formData) {
+        return unwrap(
+          $http.post(
+            baseUrl + "/yolo/field/upload",
+            formData,
+            withAuth({
+              transformRequest: angular.identity,
+              headers: { "Content-Type": undefined },
+            })
+          )
+        );
+      };
+
+      this.predictFieldYoloRecord = function (recordId, payload) {
+        return unwrap(
+          $http.post(
+            baseUrl + "/yolo/field/records/" + encodeURIComponent(recordId) + "/predict",
+            payload,
+            withAuth()
+          )
+        );
+      };
+
+      this.getBusiYoloStatus = function () {
+        return unwrap($http.get(baseUrl + "/yolo/ultrasound/busi/status", withAuth()));
+      };
+
+      this.downloadBusiYoloModel = function (force) {
+        return unwrap(
+          $http.post(
+            baseUrl + "/yolo/ultrasound/busi/model/download",
+            {},
+            withAuth({ params: { force: !!force } })
+          )
+        );
+      };
+
+      this.getBusiYoloSample = function (className, sampleIndex) {
+        return unwrap(
+          $http.get(
+            baseUrl +
+              "/yolo/ultrasound/busi/samples/" +
+              encodeURIComponent(className) +
+              "/" +
+              encodeURIComponent(String(sampleIndex)),
+            withAuth()
+          )
+        );
+      };
+
+      this.predictBusiYoloSample = function (className, sampleIndex, payload) {
+        return unwrap(
+          $http.post(
+            baseUrl +
+              "/yolo/ultrasound/busi/samples/" +
+              encodeURIComponent(className) +
+              "/" +
+              encodeURIComponent(String(sampleIndex)) +
+              "/predict",
+            payload,
+            withAuth()
+          )
+        );
+      };
+
       this.uploadBusiSample = function (formData) {
         return unwrap(
           $http.post(

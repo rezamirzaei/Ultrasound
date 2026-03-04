@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from ultrasound.api.services.liver_dataset import (
+from ultrasound.data.liver_dataset import (
     CLASS_NAMES,
     LiverDatasetPaths,
     create_synthetic_liver_dataset,
@@ -242,6 +242,7 @@ class TestYoloUtils:
     def test_parse_invalid_label(self) -> None:
         with pytest.raises(ValueError, match="expected 5 columns"):
             parse_yolo_txt_labels("0 0.5 0.5", class_names=["liver"])
+
 
 
 

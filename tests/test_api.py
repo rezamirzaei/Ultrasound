@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Generator
 from io import BytesIO
@@ -256,6 +257,152 @@ def test_protected_endpoint_requires_authentication(client: TestClient) -> None:
     payload = response.json()
     assert "detail" in payload
     assert "request_id" in payload
+
+
+def test_yolo_status_endpoint(client: TestClient) -> None:
+    response = client.get("/api/v1/yolo/status", headers=_auth_headers(client))
+    assert response.status_code == 200
+    payload = response.json()
+    assert "available" in payload
+    assert payload["backend"] == "ultralytics"
+    assert isinstance(payload.get("default_models"), list)
+
+
+def test_busi_yolo_lab_status_endpoint(client: TestClient) -> None:
+    response = client.get("/api/v1/yolo/ultrasound/busi/status", headers=_auth_headers(client))
+    assert response.status_code == 200
+    payload = response.json()
+    assert "generated_at" in payload
+    assert "yolo" in payload
+    assert "model" in payload
+    assert payload["yolo"]["backend"] == "ultralytics"
+    assert payload["model"]["model_id"]
+    assert payload["model"]["source_url"]
+    assert payload["model"]["local_path"]
+
+
+def test_busi_yolo_sample_endpoint(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/yolo/ultrasound/busi/samples/benign/0",
+        headers=_auth_headers(client),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "sample" in payload
+    assert payload["sample"]["class_name"] == "benign"
+    assert payload["sample"]["image_data_url"].startswith("data:image/png;base64,")
+    assert payload["sample"]["mask_data_url"].startswith("data:image/png;base64,")
+    assert isinstance(payload.get("yolo_labels"), list)
+    # Synthetic BUSI fixture always includes a lesion mask for benign samples.
+    assert len(payload["yolo_labels"]) == 1
+    label = payload["yolo_labels"][0]
+    assert label["class_id"] == 0
+    assert 0.0 <= label["x_center"] <= 1.0
+    assert 0.0 <= label["y_center"] <= 1.0
+    assert 0.0 < label["width"] <= 1.0
+    assert 0.0 < label["height"] <= 1.0
+
+
+def test_busi_yolo_predict_endpoint(client: TestClient) -> None:
+    headers = _auth_headers(client, username="analyst", password="analyst123")
+    response = client.post(
+        "/api/v1/yolo/ultrasound/busi/samples/benign/0/predict",
+        headers=headers,
+        json={
+            "model": "does-not-exist.pt",
+            "confidence": 0.25,
+            "iou_threshold": 0.45,
+            "image_size": 320,
+            "max_detections": 10,
+        },
+    )
+    assert response.status_code in {400, 501}
+    if response.status_code == 501:
+        assert "Ultralytics YOLO is not installed" in response.json()["detail"]
+
+
+def test_field_yolo_upload_requires_analyst_role(client: TestClient) -> None:
+    headers = _auth_headers(client, username="viewer", password="viewer123")
+    png = BytesIO()
+    Image.fromarray(np.full((32, 32, 3), 200, dtype=np.uint8), mode="RGB").save(png, format="PNG")
+
+    metadata = {
+        "asset_id": "asset-1",
+        "location_name": "unit-a",
+        "class_names": ["anomaly"],
+    }
+
+    response = client.post(
+        "/api/v1/yolo/field/upload",
+        headers=headers,
+        data={"metadata_json": json.dumps(metadata)},
+        files={"image": ("field.png", png.getvalue(), "image/png")},
+    )
+    assert response.status_code == 403
+
+
+def test_field_yolo_upload_list_detail_and_predict(client: TestClient) -> None:
+    headers = _auth_headers(client, username="analyst", password="analyst123")
+
+    png = BytesIO()
+    Image.fromarray(np.full((40, 48, 3), 150, dtype=np.uint8), mode="RGB").save(png, format="PNG")
+    labels_text = "0 0.5 0.5 0.25 0.25\n"
+
+    metadata = {
+        "asset_id": "pipe-rack-001",
+        "location_name": "Unit A",
+        "latitude": 35.0,
+        "longitude": -97.0,
+        "inspector": "qa",
+        "sensor": "camera",
+        "class_names": ["anomaly"],
+        "notes": "synthetic field record for tests",
+        "extra": {"shift": "day"},
+    }
+
+    upload_response = client.post(
+        "/api/v1/yolo/field/upload",
+        headers=headers,
+        data={"metadata_json": json.dumps(metadata)},
+        files={
+            "image": ("field.png", png.getvalue(), "image/png"),
+            "labels": ("labels.txt", labels_text, "text/plain"),
+        },
+    )
+    assert upload_response.status_code == 200
+    upload_payload = upload_response.json()
+    assert upload_payload["record_id"]
+    record_id = upload_payload["record_id"]
+
+    list_response = client.get("/api/v1/yolo/field/records", headers=headers)
+    assert list_response.status_code == 200
+    records = list_response.json()
+    assert any(item["record_id"] == record_id for item in records)
+
+    detail_response = client.get(f"/api/v1/yolo/field/records/{record_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["record_id"] == record_id
+    assert detail["metadata"]["asset_id"] == metadata["asset_id"]
+    assert detail["image_data_url"].startswith("data:image/png;base64,")
+    assert isinstance(detail.get("labels"), list)
+    assert len(detail["labels"]) == 1
+
+    predict_response = client.post(
+        f"/api/v1/yolo/field/records/{record_id}/predict",
+        headers=headers,
+        json={
+            # Keep tests deterministic: avoid large weight downloads if ultralytics is installed.
+            "model": "does-not-exist.pt",
+            "confidence": 0.25,
+            "iou_threshold": 0.45,
+            "image_size": 320,
+            "max_detections": 10,
+        },
+    )
+    assert predict_response.status_code in {400, 501}
+    if predict_response.status_code == 501:
+        assert "Ultralytics YOLO is not installed" in predict_response.json()["detail"]
 
 
 def test_dashboard_summary_endpoint(client: TestClient) -> None:

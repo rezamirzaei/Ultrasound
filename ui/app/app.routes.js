@@ -34,6 +34,18 @@
           controller: "IndustrialController",
           controllerAs: "vm",
         })
+        .when("/yolo", {
+          templateUrl: "app/views/yolo.html",
+          controller: "YoloController",
+          controllerAs: "vm",
+          requiredRole: "viewer",
+        })
+        .when("/yolo-ultrasound", {
+          templateUrl: "app/views/yolo_ultrasound.html",
+          controller: "YoloUltrasoundController",
+          controllerAs: "vm",
+          requiredRole: "viewer",
+        })
         .otherwise({ redirectTo: "/dashboard" });
     },
   ]);

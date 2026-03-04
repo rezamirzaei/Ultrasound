@@ -64,6 +64,16 @@
           >Industrial Lab</a>
           <a
             href=""
+            ng-click="main.navigate('/yolo', true, null, $event)"
+            ng-class="{active: main.isActive('/yolo'), disabled: !main.authenticated}"
+          >YOLO Field Lab</a>
+          <a
+            href=""
+            ng-click="main.navigate('/yolo-ultrasound', true, null, $event)"
+            ng-class="{active: main.isActive('/yolo-ultrasound'), disabled: !main.authenticated}"
+          >YOLO Ultrasound Lab</a>
+          <a
+            href=""
             ng-click="main.navigate('/preprocessing', true, 'analyst', $event)"
             ng-class="{active: main.isActive('/preprocessing'), disabled: !main.canAccess('analyst')}"
           >Preprocessing Lab</a>
@@ -103,6 +113,8 @@
     <script src="app/controllers/dashboard.controller.js"></script>
     <script src="app/controllers/busi.controller.js"></script>
     <script src="app/controllers/industrial.controller.js"></script>
+    <script src="app/controllers/yolo.controller.js"></script>
+    <script src="app/controllers/yolo_ultrasound.controller.js"></script>
     <script src="app/controllers/preprocessing.controller.js"></script>
     <script src="app/controllers/ndt.controller.js"></script>
   </body>

@@ -87,6 +87,11 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -e .
+
+# Optional: enable YOLO Field Lab (Ultralytics backend)
+pip install -e ".[yolo]"
+
+# Note: the Ultralytics package has its own license/terms; review before production use.
 ```
 
 ### Run Demo
@@ -147,6 +152,8 @@ UI modules:
 - Industrial Coverage: SQL-backed visibility into steel/NEU/casting splits and classes
 - BUSI Learning Monitor: queue SQL-backed training jobs and inspect train/test accuracy curves
 - Data Upload Hub: upload BUSI and industrial samples directly into SQL storage
+- YOLO Field Lab: upload field-style image records (asset/location/GPS) + optional YOLO labels, then run YOLO inference (optional dependency)
+- YOLO Ultrasound Lab: browse BUSI samples, derive YOLO labels from masks (Pydantic validated), download a BUSI-trained YOLO model from a public ultrasound project, and run inference
 - Preprocessing Lab: run Lee/Frost/CLAHE/ADMM-TV and compare metrics
 - NDT Explorer: inspect sample metadata, fused defect detections, and sampled RF waveforms
 
@@ -164,6 +171,15 @@ Key API endpoints used by the UI:
 - `GET /api/v1/learning/jobs`
 - `POST /api/v1/datasets/busi/upload`
 - `POST /api/v1/datasets/industrial/upload`
+- `GET /api/v1/yolo/status`
+- `GET /api/v1/yolo/field/records`
+- `GET /api/v1/yolo/field/records/{record_id}`
+- `POST /api/v1/yolo/field/upload` (analyst)
+- `POST /api/v1/yolo/field/records/{record_id}/predict`
+- `GET /api/v1/yolo/ultrasound/busi/status`
+- `POST /api/v1/yolo/ultrasound/busi/model/download` (analyst)
+- `GET /api/v1/yolo/ultrasound/busi/samples/{class_name}/{sample_index}`
+- `POST /api/v1/yolo/ultrasound/busi/samples/{class_name}/{sample_index}/predict`
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal?max_points=1024`
 - `POST /api/v1/preprocessing/preview`
 - `POST /api/v1/ops/datasets/resync` (admin)

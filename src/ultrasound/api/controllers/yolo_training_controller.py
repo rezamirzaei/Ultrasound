@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
 from ultrasound.api.models.domain import AuthSessionRecord
-from ultrasound.api.services.liver_dataset import (
+from ultrasound.data.liver_dataset import (
     CLASS_NAMES,
     create_synthetic_liver_dataset,
     resolve_liver_paths,
@@ -138,5 +138,6 @@ def train_liver_yolo(
         metrics=result.metrics,
         run_dir=str(result.run_dir) if result.run_dir else None,
     )
+
 
 

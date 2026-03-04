@@ -30,7 +30,7 @@ from pathlib import Path
 _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root / "src"))
 
-from ultrasound.api.services.liver_dataset import (
+from ultrasound.data.liver_dataset import (
     CLASS_NAMES,
     create_synthetic_liver_dataset,
     download_liver_dataset,
@@ -173,4 +173,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 

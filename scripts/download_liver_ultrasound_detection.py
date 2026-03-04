@@ -24,7 +24,7 @@ sys.path.insert(0, str(_project_root / "src"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-from ultrasound.api.services.liver_dataset import (
+from ultrasound.data.liver_dataset import (
     download_liver_dataset,
     summarize_dataset,
 )
