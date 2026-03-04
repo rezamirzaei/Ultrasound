@@ -82,7 +82,7 @@
         "/dashboard": "Project Dashboard",
         "/busi": "BUSI Explorer",
         "/industrial": "Industrial Learning Lab",
-        "/yolo": "YOLO Field Lab",
+        "/yolo": "Liver Ultrasound Detection",
         "/yolo-ultrasound": "YOLO Ultrasound Lab",
         "/preprocessing": "Preprocessing Lab",
         "/ndt": "NDT Sample Explorer",

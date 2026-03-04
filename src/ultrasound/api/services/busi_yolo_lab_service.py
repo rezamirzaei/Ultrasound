@@ -14,7 +14,7 @@ from ultrasound.api.models.schemas import (
     BusiYoloLabStatusResponse,
     BusiYoloModelStatus,
     BusiYoloSampleResponse,
-    FieldYoloLabel,
+    YoloLabel,
     YoloPredictRequest,
     YoloPredictResponse,
 )
@@ -135,7 +135,7 @@ class BusiYoloLabService:
         )
 
         bbox_xyxy = mask_to_xyxy(mask_binary)
-        labels: list[FieldYoloLabel] = []
+        labels: list[YoloLabel] = []
         if bbox_xyxy is not None and sample.class_name in self.CLASS_TO_ID:
             class_id = int(self.CLASS_TO_ID[sample.class_name])
             label = xyxy_to_yolo_label(

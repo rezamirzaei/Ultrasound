@@ -1,235 +1,122 @@
 <section class="panel" ng-if="vm.loading">
-  <p>Loading YOLO field workspace...</p>
+  <p>Loading Liver Ultrasound Detection Lab...</p>
 </section>
 
 <section class="panel error" ng-if="vm.error">
   <p>{{ vm.error }}</p>
 </section>
 
-<section class="panel" ng-if="!vm.loading">
-  <h3>Field YOLO Lab</h3>
+<section class="panel" ng-if="!vm.loading && vm.status">
+  <h3>Liver Ultrasound Detection Lab</h3>
   <p class="note">
-    Upload field inspection imagery with real-world metadata (asset id, location, GPS), validate it with Pydantic,
-    and run YOLO inference on-demand. Optionally attach ground-truth labels in standard YOLO txt format.
+    Browse real liver ultrasound images from the
+    <a href="https://www.kaggle.com/datasets/orvile/annotated-ultrasound-liver-images-dataset" target="_blank">
+      Annotated Ultrasound Liver Images Dataset</a>.
+    View bounding-box annotations (liver + mass) and run YOLO inference.
   </p>
 </section>
 
 <section class="panel" ng-if="!vm.loading && vm.status">
-  <h3>Backend Status</h3>
+  <h3>Backend &amp; Dataset Status</h3>
   <ul class="list compact">
-    <li><span>Backend</span><strong>{{ vm.status.backend }}</strong></li>
-    <li><span>Available</span><strong>{{ vm.status.available ? 'Yes' : 'No' }}</strong></li>
-    <li><span>Default Models</span><strong>{{ (vm.status.default_models || []).join(', ') || 'n/a' }}</strong></li>
+    <li><span>YOLO Backend</span><strong>{{ vm.status.yolo.backend }}</strong></li>
+    <li><span>Backend Available</span><strong>{{ vm.status.yolo.available ? 'Yes' : 'No' }}</strong></li>
+    <li><span>Dataset Ready</span><strong>{{ vm.status.dataset.ready ? 'Yes' : 'No' }}</strong></li>
+    <li ng-if="vm.status.dataset.summary.images"><span>Images</span><strong>{{ vm.status.dataset.summary.images }}</strong></li>
+    <li ng-if="vm.status.dataset.summary.total_boxes"><span>Bounding Boxes</span><strong>{{ vm.status.dataset.summary.total_boxes }}</strong></li>
+    <li><span>Classes</span><strong>{{ (vm.status.class_names || []).join(', ') || 'n/a' }}</strong></li>
   </ul>
-  <p class="note" ng-if="!vm.status.available">
-    Install YOLO support locally with <code>pip install -e '.[yolo]'</code>. The UI will still let you upload and
-    browse field records without running inference.
+  <p class="note" ng-if="!vm.status.dataset.ready">
+    Download the dataset first: <code>python scripts/download_liver_ultrasound_detection.py</code>
   </p>
 </section>
 
-<section class="panel" ng-if="!vm.loading && vm.canUpload">
-  <h3>Upload Field Record (Analyst)</h3>
+<section class="panel" ng-if="!vm.loading && vm.status && vm.status.dataset.ready">
+  <h3>Load Liver Sample</h3>
   <div class="toolbar">
     <label class="inline-field">
-      Asset ID
-      <input type="text" ng-model="vm.uploadForm.asset_id" />
-    </label>
-    <label class="inline-field">
-      Location
-      <input type="text" ng-model="vm.uploadForm.location_name" placeholder="Unit A" />
-    </label>
-    <label class="inline-field">
-      Latitude
-      <input type="number" step="0.000001" ng-model="vm.uploadForm.latitude" placeholder="optional" />
-    </label>
-    <label class="inline-field">
-      Longitude
-      <input type="number" step="0.000001" ng-model="vm.uploadForm.longitude" placeholder="optional" />
-    </label>
-    <label class="inline-field">
-      Sensor
-      <select ng-model="vm.uploadForm.sensor">
-        <option value="camera">camera</option>
-        <option value="phone">phone</option>
-        <option value="drone">drone</option>
-        <option value="other">other</option>
+      Category
+      <select ng-model="vm.sampleForm.category">
+        <option value="Benign">Benign</option>
+        <option value="Malignant">Malignant</option>
+        <option value="Normal">Normal</option>
       </select>
     </label>
     <label class="inline-field">
-      Classes (comma)
-      <input type="text" ng-model="vm.uploadForm.class_names" placeholder="anomaly, crack, corrosion" />
+      Index
+      <input type="number" ng-model="vm.sampleForm.sample_index" min="0" step="1" />
     </label>
-  </div>
-
-  <div class="toolbar">
-    <label class="inline-field">
-      Inspector
-      <input type="text" ng-model="vm.uploadForm.inspector" placeholder="optional" />
-    </label>
-    <label class="inline-field grow">
-      Notes
-      <input type="text" ng-model="vm.uploadForm.notes" placeholder="optional" />
-    </label>
-  </div>
-
-  <div class="toolbar">
-    <label class="inline-field">
-      Image
-      <input id="yolo-field-upload-image" type="file" accept="image/*" />
-    </label>
-    <label class="inline-field">
-      Labels (YOLO .txt)
-      <input id="yolo-field-upload-labels" type="file" accept=".txt" />
-    </label>
-    <button class="btn" type="button" ng-click="vm.uploadRecord()" ng-disabled="vm.uploadLoading">
-      {{ vm.uploadLoading ? 'Uploading...' : 'Upload Record' }}
+    <button class="btn" type="button" ng-click="vm.loadSample()" ng-disabled="vm.sampleLoading">
+      {{ vm.sampleLoading ? 'Loading...' : 'Load Sample' }}
     </button>
   </div>
-  <p class="note signal-error" ng-if="vm.uploadError">{{ vm.uploadError }}</p>
-  <p class="note" ng-if="vm.uploadResult">Uploaded record {{ vm.uploadResult.record_id }}</p>
+  <p class="note signal-error" ng-if="vm.sampleError">{{ vm.sampleError }}</p>
 </section>
 
-<section class="panel" ng-if="!vm.loading && !vm.canUpload">
-  <h3>Upload</h3>
-  <p class="note">Upload requires the <strong>analyst</strong> role.</p>
-</section>
-
-<section class="grid-2" ng-if="!vm.loading">
-  <div class="panel">
-    <h3>Records</h3>
-    <div class="toolbar">
-      <button class="btn btn-muted" type="button" ng-click="vm.refreshRecords()" ng-disabled="vm.recordsLoading">
-        {{ vm.recordsLoading ? 'Refreshing...' : 'Refresh List' }}
-      </button>
-    </div>
-    <p class="note signal-error" ng-if="vm.recordsError">{{ vm.recordsError }}</p>
-
-    <table class="result-table" ng-if="vm.records && vm.records.length">
-      <thead>
-        <tr>
-          <th>Asset</th>
-          <th>Captured</th>
-          <th>Labels</th>
-          <th>Size</th>
-        </tr>
-      </thead>
+<section class="panel" ng-if="vm.sample">
+  <h3>{{ vm.sample.image_id }} ({{ vm.sample.category }})</h3>
+  <ul class="list compact">
+    <li><span>Index</span><strong>{{ vm.sample.sample_index }} / {{ vm.sample.total_samples }}</strong></li>
+    <li><span>Shape</span><strong>{{ vm.sample.image_shape.join(' × ') }}</strong></li>
+    <li><span>Bounding Boxes</span><strong>{{ vm.sample.bboxes.length }}</strong></li>
+  </ul>
+  <div ng-if="vm.sample.bboxes.length">
+    <table class="mini-table">
+      <thead><tr><th>Class</th><th>x_min</th><th>y_min</th><th>x_max</th><th>y_max</th></tr></thead>
       <tbody>
-        <tr ng-repeat="rec in vm.records" ng-click="vm.openRecord(rec.record_id)" style="cursor: pointer">
-          <td>{{ rec.asset_id }}</td>
-          <td>{{ rec.captured_at | date:'short' }}</td>
-          <td>{{ rec.has_labels ? 'Yes' : 'No' }}</td>
-          <td>{{ rec.width }}×{{ rec.height }}</td>
+        <tr ng-repeat="b in vm.sample.bboxes">
+          <td>{{ b.class_name || b.class_id }}</td>
+          <td>{{ b.x_min | number:1 }}</td><td>{{ b.y_min | number:1 }}</td>
+          <td>{{ b.x_max | number:1 }}</td><td>{{ b.y_max | number:1 }}</td>
         </tr>
       </tbody>
     </table>
-    <p class="note" ng-if="!vm.records || !vm.records.length">No field records found yet.</p>
   </div>
-
-  <div class="panel" ng-if="vm.record">
-    <h3>Record Detail</h3>
-    <p class="note signal-error" ng-if="vm.recordError">{{ vm.recordError }}</p>
-    <p class="note" ng-if="vm.recordLoading">Loading record...</p>
-
-    <img class="preview-image" ng-if="vm.record.image_data_url" ng-src="{{ vm.record.image_data_url }}" alt="Field record" />
-
-    <ul class="list compact" ng-if="vm.record.metadata">
-      <li><span>Asset</span><strong>{{ vm.record.metadata.asset_id }}</strong></li>
-      <li><span>Location</span><strong>{{ vm.record.metadata.location_name || 'n/a' }}</strong></li>
-      <li><span>Captured</span><strong>{{ vm.record.metadata.captured_at | date:'short' }}</strong></li>
-      <li><span>GPS</span><strong>{{ vm.record.metadata.latitude == null ? 'n/a' : vm.record.metadata.latitude }}, {{ vm.record.metadata.longitude == null ? 'n/a' : vm.record.metadata.longitude }}</strong></li>
-      <li><span>Sensor</span><strong>{{ vm.record.metadata.sensor }}</strong></li>
-      <li><span>Classes</span><strong>{{ (vm.record.metadata.class_names || []).join(', ') }}</strong></li>
-    </ul>
-
-    <div ng-if="vm.record.labels && vm.record.labels.length">
-      <h4>Ground Truth Labels</h4>
-      <table class="result-table">
-        <thead>
-          <tr>
-            <th>Class</th>
-            <th>x</th>
-            <th>y</th>
-            <th>w</th>
-            <th>h</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr ng-repeat="lab in vm.record.labels">
-            <td>{{ lab.class_name || lab.class_id }}</td>
-            <td>{{ lab.x_center | number:3 }}</td>
-            <td>{{ lab.y_center | number:3 }}</td>
-            <td>{{ lab.width | number:3 }}</td>
-            <td>{{ lab.height | number:3 }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="note" ng-if="!vm.record.labels || !vm.record.labels.length">No labels attached.</p>
-  </div>
+  <img ng-src="{{ vm.sample.image_data_url }}" alt="Liver sample" class="preview-image" style="max-width:512px" />
 </section>
 
-<section class="panel" ng-if="!vm.loading && vm.record">
+<section class="panel" ng-if="vm.sample && vm.status.yolo.available">
   <h3>Run YOLO Inference</h3>
   <div class="toolbar">
     <label class="inline-field">
       Model
-      <input type="text" ng-model="vm.predictForm.model" placeholder="yolov8n.pt or path/to/weights.pt" />
+      <input type="text" ng-model="vm.predictForm.model" style="width:140px" />
     </label>
     <label class="inline-field">
-      Conf
-      <input type="number" min="0" max="1" step="0.01" ng-model="vm.predictForm.confidence" />
+      Confidence
+      <input type="number" ng-model="vm.predictForm.confidence" min="0" max="1" step="0.05" style="width:70px" />
     </label>
     <label class="inline-field">
-      IoU
-      <input type="number" min="0" max="1" step="0.01" ng-model="vm.predictForm.iou_threshold" />
-    </label>
-    <label class="inline-field">
-      Size
-      <input type="number" min="160" max="2048" step="32" ng-model="vm.predictForm.image_size" />
-    </label>
-    <label class="inline-field">
-      Max Det
-      <input type="number" min="1" max="1000" step="1" ng-model="vm.predictForm.max_detections" />
+      Image Size
+      <input type="number" ng-model="vm.predictForm.image_size" min="160" max="2048" step="32" style="width:70px" />
     </label>
     <button class="btn" type="button" ng-click="vm.runPrediction()" ng-disabled="vm.predictionLoading">
       {{ vm.predictionLoading ? 'Running...' : 'Predict' }}
     </button>
   </div>
   <p class="note signal-error" ng-if="vm.predictionError">{{ vm.predictionError }}</p>
+</section>
 
-  <div class="grid-2" ng-if="vm.prediction">
-    <div class="panel">
-      <h4>Annotated Output</h4>
-      <img class="preview-image" ng-src="{{ vm.prediction.annotated_image_data_url }}" alt="YOLO annotated" />
-      <p class="note">Model: {{ vm.prediction.model }} · Detections: {{ (vm.prediction.detections || []).length }}</p>
-    </div>
-
-    <div class="panel">
-      <h4>Detections</h4>
-      <table class="result-table" ng-if="vm.prediction.detections && vm.prediction.detections.length">
-        <thead>
-          <tr>
-            <th>Class</th>
-            <th>Conf</th>
-            <th>x1</th>
-            <th>y1</th>
-            <th>x2</th>
-            <th>y2</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr ng-repeat="det in vm.prediction.detections">
-            <td>{{ det.class_name || det.class_id }}</td>
-            <td>{{ det.confidence | number:3 }}</td>
-            <td>{{ det.bbox.x1 | number:1 }}</td>
-            <td>{{ det.bbox.y1 | number:1 }}</td>
-            <td>{{ det.bbox.x2 | number:1 }}</td>
-            <td>{{ det.bbox.y2 | number:1 }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="note" ng-if="!vm.prediction.detections || !vm.prediction.detections.length">No detections.</p>
-    </div>
+<section class="panel" ng-if="vm.prediction">
+  <h3>Prediction Result</h3>
+  <ul class="list compact">
+    <li><span>Model</span><strong>{{ vm.prediction.model }}</strong></li>
+    <li><span>Detections</span><strong>{{ vm.prediction.detections.length }}</strong></li>
+    <li><span>Backend</span><strong>{{ vm.prediction.backend }}</strong></li>
+  </ul>
+  <div ng-if="vm.prediction.detections.length">
+    <table class="mini-table">
+      <thead><tr><th>Class</th><th>Confidence</th><th>x1</th><th>y1</th><th>x2</th><th>y2</th></tr></thead>
+      <tbody>
+        <tr ng-repeat="d in vm.prediction.detections">
+          <td>{{ d.class_name || d.class_id }}</td>
+          <td>{{ d.confidence | number:3 }}</td>
+          <td>{{ d.bbox.x1 | number:0 }}</td><td>{{ d.bbox.y1 | number:0 }}</td>
+          <td>{{ d.bbox.x2 | number:0 }}</td><td>{{ d.bbox.y2 | number:0 }}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
+  <img ng-src="{{ vm.prediction.annotated_image_data_url }}" alt="Annotated prediction" class="preview-image" style="max-width:512px" />
 </section>
 

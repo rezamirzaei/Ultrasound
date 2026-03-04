@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
@@ -413,22 +413,7 @@ class BusiYoloLabStatusResponse(BaseModel):
     yolo_class_names: List[str] = Field(default_factory=list)
 
 
-class FieldYoloMetadata(BaseModel):
-    """Real-world field capture metadata for YOLO-friendly image records."""
-
-    asset_id: str = Field(min_length=2, max_length=128)
-    location_name: str | None = Field(default=None, max_length=128)
-    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
-    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
-    captured_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
-    inspector: str | None = Field(default=None, max_length=128)
-    sensor: Literal["phone", "drone", "camera", "other"] = "camera"
-    class_names: List[str] = Field(default_factory=lambda: ["anomaly"], min_length=1)
-    notes: str | None = Field(default=None, max_length=1000)
-    extra: Dict[str, Any] = Field(default_factory=dict)
-
-
-class FieldYoloLabel(BaseModel):
+class YoloLabel(BaseModel):
     """One YOLO-format label row (normalized xywh)."""
 
     class_id: int = Field(ge=0)
@@ -437,41 +422,6 @@ class FieldYoloLabel(BaseModel):
     y_center: float = Field(ge=0.0, le=1.0)
     width: float = Field(gt=0.0, le=1.0)
     height: float = Field(gt=0.0, le=1.0)
-
-
-class FieldYoloRecordManifest(BaseModel):
-    record_id: str
-    created_at: datetime
-    metadata: FieldYoloMetadata
-    image_filename: str
-    stored_image: str
-    labels_filename: str | None = None
-    stored_labels: str | None = None
-    width: int = Field(gt=0)
-    height: int = Field(gt=0)
-
-
-class FieldYoloRecordSummary(BaseModel):
-    record_id: str
-    created_at: datetime
-    asset_id: str
-    location_name: str | None = None
-    captured_at: datetime
-    has_labels: bool = False
-    width: int = Field(gt=0)
-    height: int = Field(gt=0)
-
-
-class FieldYoloRecordDetail(BaseModel):
-    record_id: str
-    created_at: datetime
-    metadata: FieldYoloMetadata
-    image_filename: str
-    width: int = Field(gt=0)
-    height: int = Field(gt=0)
-    image_data_url: str
-    labels: List[FieldYoloLabel] = Field(default_factory=list)
-    raw_labels: str | None = None
 
 
 class YoloPredictRequest(BaseModel):
@@ -494,7 +444,7 @@ class BusiYoloSampleResponse(BaseModel):
 
     sample: BusiSamplePreview
     yolo_class_names: List[str] = Field(default_factory=list)
-    yolo_labels: List[FieldYoloLabel] = Field(default_factory=list)
+    yolo_labels: List[YoloLabel] = Field(default_factory=list)
     raw_yolo_labels: str | None = None
     bbox_xyxy: YoloXyxyBox | None = None
 
@@ -514,3 +464,92 @@ class YoloPredictResponse(BaseModel):
     annotated_image_data_url: str
     backend: str
     notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Liver Ultrasound Detection Lab
+# ---------------------------------------------------------------------------
+
+class LiverDatasetStatusResponse(BaseModel):
+    """Status of the liver ultrasound detection dataset on disk."""
+
+    ready: bool
+    summary: Dict[str, Any]
+    generated_at: datetime
+
+
+class LiverYoloLabStatusResponse(BaseModel):
+    """Combined status for the liver YOLO detection lab."""
+
+    generated_at: datetime
+    yolo: YoloStatusResponse
+    dataset: LiverDatasetStatusResponse
+    class_names: List[str] = Field(default_factory=list)
+
+
+class LiverSampleBbox(BaseModel):
+    """One bounding box from the liver CSV annotations."""
+
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    class_id: int = Field(ge=0)
+    class_name: str | None = None
+
+
+class LiverSampleResponse(BaseModel):
+    """Preview of a liver ultrasound sample with bbox annotations."""
+
+    category: str
+    sample_index: int = Field(ge=0)
+    total_samples: int = Field(ge=0)
+    image_id: str
+    image_shape: List[int]
+    bboxes: List[LiverSampleBbox] = Field(default_factory=list)
+    class_names: List[str] = Field(default_factory=list)
+    image_data_url: str
+
+
+# ---------------------------------------------------------------------------
+# YOLO Training
+# ---------------------------------------------------------------------------
+
+class YoloTrainRequest(BaseModel):
+    """Request body for launching a YOLO training run."""
+
+    pretrained_weights: str = Field(default="yolo11n.pt", min_length=1)
+    epochs: int = Field(default=50, ge=1, le=500)
+    batch_size: int = Field(default=16, ge=1, le=128)
+    image_size: int = Field(default=640, ge=160, le=2048)
+    learning_rate: float = Field(default=0.01, gt=0.0, le=1.0)
+    patience: int = Field(default=10, ge=1, le=100)
+    train_ratio: float = Field(default=0.8, gt=0.1, lt=1.0)
+    freeze_layers: int = Field(default=0, ge=0, le=50)
+    use_synthetic: bool = Field(default=False)
+    synthetic_samples: int = Field(default=30, ge=10, le=500)
+
+
+class YoloTrainResponse(BaseModel):
+    """Result of a YOLO training run."""
+
+    generated_at: datetime
+    best_weights: str | None = None
+    last_weights: str | None = None
+    epochs_completed: int = 0
+    metrics: Dict[str, float] = Field(default_factory=dict)
+    run_dir: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Downloaded asset provenance
+# ---------------------------------------------------------------------------
+
+class DownloadedAssetManifest(BaseModel):
+    """Minimal provenance for downloaded YOLO assets (weights, sample images)."""
+
+    source_url: str = Field(min_length=8, max_length=2048)
+    downloaded_at: datetime
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+

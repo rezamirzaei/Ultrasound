@@ -9,23 +9,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import ValidationError
 
-from ultrasound.api.models.schemas import FieldYoloLabel, YoloXyxyBox
+from ultrasound.api.models.schemas import (
+    DownloadedAssetManifest,
+    YoloLabel,
+    YoloXyxyBox,
+)
 
 
 # ---------------------------------------------------------------------------
-# Asset manifest (provenance for downloaded weights / sample images)
+# Asset manifest helpers
 # ---------------------------------------------------------------------------
-
-class DownloadedAssetManifest(BaseModel):
-    """Minimal provenance for downloaded YOLO assets."""
-
-    source_url: str = Field(min_length=8, max_length=2048)
-    downloaded_at: datetime
-    sha256: str = Field(min_length=64, max_length=64)
-    size_bytes: int = Field(ge=0)
-
 
 def load_manifest(path: Path) -> DownloadedAssetManifest | None:
     if not path.exists():
@@ -110,7 +105,7 @@ def xyxy_to_yolo_label(
     class_name: str | None,
     image_width: int,
     image_height: int,
-) -> FieldYoloLabel:
+) -> YoloLabel:
     """Convert pixel xyxy box into a normalized YOLO xywh label."""
     if image_width <= 0 or image_height <= 0:
         raise ValueError("image_width / image_height must be positive")
@@ -123,7 +118,7 @@ def xyxy_to_yolo_label(
     x_center = (x1 + x2 + 1.0) / 2.0
     y_center = (y1 + y2 + 1.0) / 2.0
 
-    return FieldYoloLabel(
+    return YoloLabel(
         class_id=int(class_id),
         class_name=class_name,
         x_center=float(x_center / float(image_width)),
@@ -137,7 +132,7 @@ def xyxy_to_yolo_label(
 # YOLO .txt label formatting / parsing
 # ---------------------------------------------------------------------------
 
-def format_yolo_labels(labels: list[FieldYoloLabel]) -> str:
+def format_yolo_labels(labels: list[YoloLabel]) -> str:
     """Render a list of labels as a YOLO ``.txt`` string."""
     if not labels:
         return ""
@@ -152,12 +147,12 @@ def parse_yolo_txt_labels(
     labels_text: str,
     *,
     class_names: list[str] | None = None,
-) -> list[FieldYoloLabel]:
+) -> list[YoloLabel]:
     """Parse a YOLO .txt payload into validated label rows."""
     safe_class_names = class_names or []
     class_count = max(1, len(safe_class_names))
 
-    parsed: list[FieldYoloLabel] = []
+    parsed: list[YoloLabel] = []
     for line_number, raw in enumerate((labels_text or "").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -180,7 +175,7 @@ def parse_yolo_txt_labels(
             )
 
         parsed.append(
-            FieldYoloLabel(
+            YoloLabel(
                 class_id=class_id,
                 class_name=safe_class_names[class_id] if class_id < len(safe_class_names) else None,
                 x_center=x_center,
@@ -189,4 +184,6 @@ def parse_yolo_txt_labels(
                 height=height,
             )
         )
+
     return parsed
+

@@ -10,178 +10,75 @@
       vm.loading = true;
       vm.error = null;
       vm.status = null;
-      vm.canUpload = ApiService.hasRole("analyst");
 
-      vm.records = [];
-      vm.recordsLoading = false;
-      vm.recordsError = null;
-
-      vm.record = null;
-      vm.recordLoading = false;
-      vm.recordError = null;
-
-      vm.uploadLoading = false;
-      vm.uploadError = null;
-      vm.uploadResult = null;
+      vm.sampleLoading = false;
+      vm.sampleError = null;
+      vm.sample = null;
 
       vm.predictionLoading = false;
       vm.predictionError = null;
       vm.prediction = null;
 
-      vm.uploadForm = {
-        asset_id: "pipe-rack-001",
-        location_name: "Unit A",
-        latitude: null,
-        longitude: null,
-        sensor: "camera",
-        class_names: "anomaly",
-        inspector: "",
-        notes: "",
+      vm.sampleForm = {
+        category: "Benign",
+        sample_index: 0,
       };
 
       vm.predictForm = {
-        model: "yolov8n.pt",
+        model: "yolo11n.pt",
         confidence: 0.25,
         iou_threshold: 0.45,
         image_size: 640,
         max_detections: 100,
       };
 
-      vm.refreshRecords = refreshRecords;
-      vm.openRecord = openRecord;
-      vm.uploadRecord = uploadRecord;
+      vm.refreshStatus = refreshStatus;
+      vm.loadSample = loadSample;
       vm.runPrediction = runPrediction;
 
-      function toClassNames(raw) {
-        if (!raw) {
-          return ["anomaly"];
-        }
-        var parts = String(raw)
-          .split(",")
-          .map(function (item) {
-            return item.trim();
-          })
-          .filter(function (item) {
-            return !!item;
-          });
-        return parts.length ? parts : ["anomaly"];
-      }
-
       function refreshStatus() {
-        return ApiService.getYoloStatus()
+        return ApiService.getLiverYoloStatus()
           .then(function (payload) {
             vm.status = payload;
-            if (payload && payload.default_models && payload.default_models.length) {
-              vm.predictForm.model = payload.default_models[0];
-            }
           })
           .catch(function (error) {
             vm.status = null;
-            vm.error = error.detail || "Failed to load YOLO backend status";
+            vm.error = error.detail || "Failed to load liver YOLO lab status";
           });
       }
 
-      function refreshRecords() {
-        vm.recordsLoading = true;
-        vm.recordsError = null;
-        return ApiService.listFieldYoloRecords(80)
-          .then(function (payload) {
-            vm.records = payload || [];
-            if (!vm.record && vm.records.length) {
-              openRecord(vm.records[0].record_id);
-            }
-          })
-          .catch(function (error) {
-            vm.recordsError = error.detail || "Failed to load field records";
-          })
-          .finally(function () {
-            vm.recordsLoading = false;
-          });
-      }
-
-      function openRecord(recordId) {
-        if (!recordId) {
-          return;
-        }
-        vm.recordLoading = true;
-        vm.recordError = null;
+      function loadSample() {
+        vm.sampleLoading = true;
+        vm.sampleError = null;
+        vm.sample = null;
         vm.prediction = null;
         vm.predictionError = null;
 
-        ApiService.getFieldYoloRecord(recordId)
+        var category = vm.sampleForm.category || "Benign";
+        var index = Math.max(0, Math.floor(vm.sampleForm.sample_index || 0));
+
+        return ApiService.getLiverSample(category, index)
           .then(function (payload) {
-            vm.record = payload;
+            vm.sample = payload;
           })
           .catch(function (error) {
-            vm.recordError = error.detail || "Failed to load record details";
+            vm.sampleError = error.detail || "Failed to load liver sample";
           })
           .finally(function () {
-            vm.recordLoading = false;
-          });
-      }
-
-      function uploadRecord() {
-        if (!vm.canUpload) {
-          return;
-        }
-        vm.uploadLoading = true;
-        vm.uploadError = null;
-        vm.uploadResult = null;
-
-        var imageInput = document.getElementById("yolo-field-upload-image");
-        if (!imageInput || !imageInput.files || !imageInput.files.length) {
-          vm.uploadLoading = false;
-          vm.uploadError = "Select an image file before upload.";
-          return;
-        }
-
-        var labelsInput = document.getElementById("yolo-field-upload-labels");
-        var metadata = {
-          asset_id: vm.uploadForm.asset_id,
-          location_name: vm.uploadForm.location_name || null,
-          latitude: vm.uploadForm.latitude == null ? null : Number(vm.uploadForm.latitude),
-          longitude: vm.uploadForm.longitude == null ? null : Number(vm.uploadForm.longitude),
-          captured_at: new Date().toISOString(),
-          inspector: vm.uploadForm.inspector || null,
-          sensor: vm.uploadForm.sensor || "camera",
-          class_names: toClassNames(vm.uploadForm.class_names),
-          notes: vm.uploadForm.notes || null,
-          extra: {},
-        };
-
-        var formData = new FormData();
-        formData.append("metadata_json", JSON.stringify(metadata));
-        formData.append("image", imageInput.files[0]);
-        if (labelsInput && labelsInput.files && labelsInput.files.length) {
-          formData.append("labels", labelsInput.files[0]);
-        }
-
-        ApiService.uploadFieldYoloRecord(formData)
-          .then(function (payload) {
-            vm.uploadResult = payload;
-            imageInput.value = "";
-            if (labelsInput) {
-              labelsInput.value = "";
-            }
-            return refreshRecords().then(function () {
-              openRecord(payload.record_id);
-            });
-          })
-          .catch(function (error) {
-            vm.uploadError = error.detail || "Upload failed";
-          })
-          .finally(function () {
-            vm.uploadLoading = false;
+            vm.sampleLoading = false;
           });
       }
 
       function runPrediction() {
-        if (!vm.record || !vm.record.record_id) {
+        if (!vm.sample) {
           return;
         }
         vm.predictionLoading = true;
         vm.predictionError = null;
         vm.prediction = null;
+
+        var category = vm.sample.category;
+        var index = vm.sample.sample_index;
 
         var payload = {
           model: vm.predictForm.model,
@@ -191,7 +88,7 @@
           max_detections: Math.max(1, Math.floor(vm.predictForm.max_detections || 100)),
         };
 
-        ApiService.predictFieldYoloRecord(vm.record.record_id, payload)
+        return ApiService.predictLiverSample(category, index, payload)
           .then(function (prediction) {
             vm.prediction = prediction;
           })
@@ -206,7 +103,10 @@
       function init() {
         vm.loading = true;
         vm.error = null;
-        $q.all([refreshStatus(), refreshRecords()])
+        $q.all([refreshStatus()])
+          .then(function () {
+            return loadSample();
+          })
           .finally(function () {
             vm.loading = false;
           });
@@ -216,4 +116,3 @@
     },
   ]);
 })();
-

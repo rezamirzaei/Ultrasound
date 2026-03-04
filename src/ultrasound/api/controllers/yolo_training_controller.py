@@ -5,11 +5,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
 from ultrasound.api.models.domain import AuthSessionRecord
+from ultrasound.api.models.schemas import (
+    LiverDatasetStatusResponse,
+    YoloTrainRequest,
+    YoloTrainResponse,
+)
 from ultrasound.data.liver_dataset import (
     CLASS_NAMES,
     create_synthetic_liver_dataset,
@@ -26,36 +30,6 @@ router = APIRouter(
     tags=["yolo-training"],
     dependencies=[Depends(require_role("viewer"))],
 )
-
-
-# -- Request / Response schemas ---------------------------------------------
-
-class LiverDatasetStatusResponse(BaseModel):
-    ready: bool
-    summary: dict
-    generated_at: datetime
-
-
-class YoloTrainRequest(BaseModel):
-    pretrained_weights: str = Field(default="yolo11n.pt", min_length=1)
-    epochs: int = Field(default=50, ge=1, le=500)
-    batch_size: int = Field(default=16, ge=1, le=128)
-    image_size: int = Field(default=640, ge=160, le=2048)
-    learning_rate: float = Field(default=0.01, gt=0.0, le=1.0)
-    patience: int = Field(default=10, ge=1, le=100)
-    train_ratio: float = Field(default=0.8, gt=0.1, lt=1.0)
-    freeze_layers: int = Field(default=0, ge=0, le=50)
-    use_synthetic: bool = Field(default=False)
-    synthetic_samples: int = Field(default=30, ge=10, le=500)
-
-
-class YoloTrainResponse(BaseModel):
-    generated_at: datetime
-    best_weights: str | None = None
-    last_weights: str | None = None
-    epochs_completed: int = 0
-    metrics: dict[str, float] = Field(default_factory=dict)
-    run_dir: str | None = None
 
 
 # -- Endpoints ---------------------------------------------------------------
@@ -138,6 +112,7 @@ def train_liver_yolo(
         metrics=result.metrics,
         run_dir=str(result.run_dir) if result.run_dir else None,
     )
+
 
 
 

@@ -323,31 +323,32 @@
         return unwrap($http.get(baseUrl + "/yolo/status", withAuth()));
       };
 
-      this.listFieldYoloRecords = function (limit) {
-        return unwrap($http.get(baseUrl + "/yolo/field/records", withAuth({ params: { limit: limit || 50 } })));
+      this.getLiverYoloStatus = function () {
+        return unwrap($http.get(baseUrl + "/yolo/liver/status", withAuth()));
       };
 
-      this.getFieldYoloRecord = function (recordId) {
-        return unwrap($http.get(baseUrl + "/yolo/field/records/" + encodeURIComponent(recordId), withAuth()));
-      };
-
-      this.uploadFieldYoloRecord = function (formData) {
+      this.getLiverSample = function (category, sampleIndex) {
         return unwrap(
-          $http.post(
-            baseUrl + "/yolo/field/upload",
-            formData,
-            withAuth({
-              transformRequest: angular.identity,
-              headers: { "Content-Type": undefined },
-            })
+          $http.get(
+            baseUrl +
+              "/yolo/liver/samples/" +
+              encodeURIComponent(category) +
+              "/" +
+              encodeURIComponent(String(sampleIndex)),
+            withAuth()
           )
         );
       };
 
-      this.predictFieldYoloRecord = function (recordId, payload) {
+      this.predictLiverSample = function (category, sampleIndex, payload) {
         return unwrap(
           $http.post(
-            baseUrl + "/yolo/field/records/" + encodeURIComponent(recordId) + "/predict",
+            baseUrl +
+              "/yolo/liver/samples/" +
+              encodeURIComponent(category) +
+              "/" +
+              encodeURIComponent(String(sampleIndex)) +
+              "/predict",
             payload,
             withAuth()
           )

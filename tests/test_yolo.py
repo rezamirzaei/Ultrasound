@@ -27,7 +27,7 @@ from ultrasound.api.services.yolo_utils import (
     parse_yolo_txt_labels,
     xyxy_to_yolo_label,
 )
-from ultrasound.api.models.schemas import FieldYoloLabel, YoloXyxyBox
+from ultrasound.api.models.schemas import YoloLabel, YoloXyxyBox
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ class TestYoloUtils:
 
     def test_format_and_parse_labels(self) -> None:
         labels = [
-            FieldYoloLabel(class_id=0, class_name="liver",
+            YoloLabel(class_id=0, class_name="liver",
                           x_center=0.5, y_center=0.5, width=0.8, height=0.6),
         ]
         txt = format_yolo_labels(labels)
@@ -242,6 +242,8 @@ class TestYoloUtils:
     def test_parse_invalid_label(self) -> None:
         with pytest.raises(ValueError, match="expected 5 columns"):
             parse_yolo_txt_labels("0 0.5 0.5", class_names=["liver"])
+
+
 
 
 
