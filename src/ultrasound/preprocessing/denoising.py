@@ -22,7 +22,7 @@ from typing import Tuple, cast
 
 import cv2
 import numpy as np
-from scipy.sparse import csr_matrix, diags, eye, kron, vstack
+from scipy.sparse import csr_matrix, diags, eye, kron, lil_matrix, vstack
 from scipy.sparse.linalg import cg
 
 
@@ -294,7 +294,6 @@ def _build_difference_operators(m: int, n: int) -> Tuple[csr_matrix, csr_matrix]
     def _diff1d(k: int) -> csr_matrix:
         # D1 u = [u1-u0, u2-u1, ..., u_{k-1}-u_{k-2}, 0]
         # Last row is zero (reflexive / Neumann boundary)
-        from scipy.sparse import lil_matrix
 
         d = lil_matrix((k, k))
         for i in range(k - 1):

@@ -7,6 +7,7 @@ Dataset: https://www.kaggle.com/datasets/aryashah2k/breast-ultrasound-images-dat
 """
 
 import shutil
+import zipfile
 from pathlib import Path
 
 
@@ -39,7 +40,6 @@ def download_busi_dataset(data_dir: str = "data/busi"):
     # Manual zip fallback
     zip_candidates = sorted(data_path.glob("*.zip"))
     if zip_candidates:
-        import zipfile
 
         zip_path = zip_candidates[0]
         print(f"Found a ZIP file at {zip_path}. Extracting...")

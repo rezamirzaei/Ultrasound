@@ -14,6 +14,9 @@ from typing import Dict, List, Optional, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
+from scipy.ndimage import uniform_filter
+from sklearn.metrics import auc, roc_curve
+from sklearn.preprocessing import label_binarize
 
 # Custom colormap for ultrasound visualization
 ULTRASOUND_CMAP = LinearSegmentedColormap.from_list(
@@ -287,7 +290,6 @@ def plot_roc_curve(
     Returns:
         Matplotlib figure
     """
-    from sklearn.metrics import auc, roc_curve
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -302,7 +304,6 @@ def plot_roc_curve(
         ax.plot(fpr, tpr, lw=2, label=f"ROC curve (AUC = {roc_auc:.3f})")
     else:
         # Multi-class
-        from sklearn.preprocessing import label_binarize
 
         n_classes = y_score.shape[1]
         y_true_bin = label_binarize(y_true, classes=range(n_classes))
@@ -438,7 +439,6 @@ def plot_speckle_analysis(
     axes[1].set_title("Intensity Histogram")
 
     # Local coefficient of variation map
-    from scipy.ndimage import uniform_filter
 
     local_mean = uniform_filter(image.astype(float), size=window_size)
     local_sq_mean = uniform_filter(image.astype(float) ** 2, size=window_size)

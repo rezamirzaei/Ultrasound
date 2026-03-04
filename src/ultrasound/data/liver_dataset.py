@@ -19,10 +19,14 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import shutil
 import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+
+import numpy as np
+from PIL import Image
 
 logger = logging.getLogger("inphase.yolo.liver")
 
@@ -218,7 +222,6 @@ def _ensure_flat_images(paths: LiverDatasetPaths) -> Path:
     The YOLO preparer expects all images in one folder.
     Creates ``images_flat/`` with files like ``Benign_63.jpg``.
     """
-    import shutil
 
     flat_dir = paths.train_images_dir
     if flat_dir.is_dir() and any(flat_dir.iterdir()):
@@ -309,8 +312,6 @@ def create_synthetic_liver_dataset(dest_dir: Path, *, n_samples: int = 30) -> Li
     Creates random grayscale "ultrasound-like" images with random bounding
     boxes so the full training loop can be exercised without real data.
     """
-    import numpy as np
-    from PIL import Image
 
     dest_dir = Path(dest_dir)
     flat_dir = dest_dir / "images_flat"

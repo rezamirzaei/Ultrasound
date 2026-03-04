@@ -13,11 +13,15 @@ from typing import Sequence
 
 import matplotlib
 import numpy as np
+import torch
+from PIL import Image
+from torchvision import transforms
+from torchvision.transforms import InterpolationMode
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from ultrasound.data import BUSIDataset, create_sample_data
+from ultrasound.data import BUSIDataset, _generate_synthetic_ultrasound, create_sample_data
 from ultrasound.models.classifier import ResNetClassifier, UltrasoundClassifier
 from ultrasound.models.unet import AttentionUNet, UNet, combined_loss, dice_loss
 from ultrasound.preprocessing.denoising import admm_tv_denoising
@@ -100,7 +104,6 @@ def demo_segmentation(output_dir: Path) -> None:
     print("SEGMENTATION MODEL DEMONSTRATION")
     print("=" * 60)
 
-    import torch
 
     model = UNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512])
     total_params = sum(p.numel() for p in model.parameters())
@@ -148,7 +151,6 @@ def demo_classification(output_dir: Path) -> None:
     print("CLASSIFICATION MODEL DEMONSTRATION")
     print("=" * 60)
 
-    import torch
 
     custom_model = UltrasoundClassifier(num_classes=2, dropout=0.5)
     custom_params = sum(p.numel() for p in custom_model.parameters())
@@ -233,8 +235,6 @@ def demo_full_pipeline(data_dir: Path, output_dir: Path) -> None:
         print("\nCreating synthetic ultrasound data for demonstration...")
         create_sample_data(str(data_dir), num_samples=5)
 
-    from torchvision import transforms
-    from torchvision.transforms import InterpolationMode
 
     transform = transforms.Compose(
         [
@@ -309,9 +309,6 @@ def main(demos: Sequence[str], output_dir: Path, data_dir: Path) -> None:
     def _get_test_image() -> np.ndarray:
         nonlocal test_image
         if test_image is None:
-            from PIL import Image
-
-            from ultrasound.data import _generate_synthetic_ultrasound
 
             print("\nGenerating synthetic ultrasound image for demonstration...")
             test_image = _generate_synthetic_ultrasound("benign", size=(256, 256))

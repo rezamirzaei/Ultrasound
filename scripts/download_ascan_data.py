@@ -13,6 +13,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+import numpy as np
+
 import requests
 
 
@@ -111,7 +113,6 @@ def generate_sample_ndt_data(data_dir):
     - Thickness measurement
     - Defect detection
     """
-    import numpy as np
 
     ndt_dir = data_dir / "ndt_samples"
     ndt_dir.mkdir(parents=True, exist_ok=True)
