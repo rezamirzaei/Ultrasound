@@ -87,12 +87,41 @@ class YoloService:
             return str(names[class_id])
         return None
 
-    def predict(self, image_rgb: np.ndarray, request: YoloPredictRequest) -> YoloPredictResponse:
-        image = np.asarray(image_rgb, dtype=np.uint8)
+    @staticmethod
+    def _normalize_image(image_rgb: np.ndarray) -> np.ndarray:
+        image = np.asarray(image_rgb)
         if image.ndim != 3 or image.shape[2] != 3:
             raise ValueError("YOLO inference expects an RGB image with shape [H, W, 3]")
         if image.shape[0] == 0 or image.shape[1] == 0:
             raise ValueError("YOLO inference expects a non-empty image")
+        if not np.isfinite(image).all():
+            raise ValueError("YOLO inference expects finite image values")
+
+        if image.dtype == np.uint8:
+            return np.ascontiguousarray(image)
+
+        normalized = np.asarray(image, dtype=np.float64)
+        if normalized.size and normalized.min() >= 0.0 and normalized.max() <= 1.0:
+            normalized = normalized * 255.0
+        normalized = np.clip(normalized, 0.0, 255.0).astype(np.uint8)
+        return np.ascontiguousarray(normalized)
+
+    @staticmethod
+    def _clip_bbox(row: np.ndarray, *, image_width: int, image_height: int) -> YoloXyxyBox | None:
+        if row.shape[0] < 4 or not np.isfinite(row[:4]).all():
+            return None
+        max_x = float(image_width - 1)
+        max_y = float(image_height - 1)
+        x1 = min(max(float(row[0]), 0.0), max_x)
+        y1 = min(max(float(row[1]), 0.0), max_y)
+        x2 = min(max(float(row[2]), 0.0), max_x)
+        y2 = min(max(float(row[3]), 0.0), max_y)
+        if x2 < x1 or y2 < y1:
+            return None
+        return YoloXyxyBox(x1=x1, y1=y1, x2=x2, y2=y2)
+
+    def predict(self, image_rgb: np.ndarray, request: YoloPredictRequest) -> YoloPredictResponse:
+        image = self._normalize_image(image_rgb)
 
         weights = (request.model or "").strip()
         model = None
@@ -146,6 +175,8 @@ class YoloService:
         boxes = getattr(result, "boxes", None)
         if boxes is not None and getattr(boxes, "xyxy", None) is not None:
             xyxy = np.asarray(boxes.xyxy.cpu().numpy(), dtype=np.float64)
+            if xyxy.ndim != 2:
+                raise ValueError("YOLO backend returned invalid detection coordinates")
             conf = (
                 np.asarray(boxes.conf.cpu().numpy(), dtype=np.float64)
                 if boxes.conf is not None
@@ -159,20 +190,25 @@ class YoloService:
             n = int(xyxy.shape[0])
 
             for index in range(n):
-                class_id = int(cls[index]) if cls is not None else -1
-                class_name = self._resolve_class_name(names, class_id)
+                raw_confidence = float(conf[index]) if conf is not None else 0.0
+                if not np.isfinite(raw_confidence):
+                    continue
 
-                bbox = YoloXyxyBox(
-                    x1=float(xyxy[index, 0]),
-                    y1=float(xyxy[index, 1]),
-                    x2=float(xyxy[index, 2]),
-                    y2=float(xyxy[index, 3]),
+                raw_class_id = float(cls[index]) if cls is not None else -1.0
+                class_id = int(raw_class_id) if np.isfinite(raw_class_id) else -1
+                class_name = self._resolve_class_name(names, class_id)
+                bbox = self._clip_bbox(
+                    xyxy[index],
+                    image_width=int(image.shape[1]),
+                    image_height=int(image.shape[0]),
                 )
+                if bbox is None:
+                    continue
                 detections.append(
                     YoloDetection(
                         class_id=class_id,
                         class_name=class_name,
-                        confidence=float(conf[index]) if conf is not None else 0.0,
+                        confidence=raw_confidence,
                         bbox=bbox,
                     )
                 )

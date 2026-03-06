@@ -22,7 +22,9 @@ class AppConfig:
     @classmethod
     def from_project_root(cls, start: Path | None = None) -> AppConfig:
         """Resolve project root and construct default path configuration."""
-        cursor = (start or Path.cwd()).resolve()
+        cursor = (start or Path.cwd()).expanduser().resolve()
+        if cursor.is_file():
+            cursor = cursor.parent
         for candidate in (cursor, *cursor.parents):
             if (candidate / "pyproject.toml").exists() and (candidate / "src").exists():
                 project_root = candidate
@@ -34,7 +36,7 @@ class AppConfig:
 
         data_dir = project_root / "data"
         default_db_url = f"sqlite:///{(data_dir / 'inphase.sqlite3').resolve()}"
-        database_url = os.getenv("INPHASE_DATABASE_URL", default_db_url)
+        database_url = (os.getenv("INPHASE_DATABASE_URL") or "").strip() or default_db_url
         return cls(
             project_root=project_root,
             data_dir=data_dir,

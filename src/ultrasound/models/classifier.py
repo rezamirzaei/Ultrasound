@@ -9,7 +9,11 @@ Includes:
 - Transfer learning with pretrained ResNet
 """
 
-from typing import Optional, cast
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import cast
 
 import torch
 import torch.nn as nn
@@ -39,6 +43,12 @@ class UltrasoundClassifier(nn.Module):
         dropout: float = 0.5,
     ):
         super().__init__()
+        if num_classes <= 0:
+            raise ValueError("num_classes must be positive")
+        if in_channels <= 0:
+            raise ValueError("in_channels must be positive")
+        if not 0.0 <= dropout < 1.0:
+            raise ValueError("dropout must be in the range [0, 1)")
 
         self.features = nn.Sequential(
             # Block 1: 256 -> 128
@@ -98,13 +108,13 @@ class UltrasoundClassifier(nn.Module):
 
     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
         """Get probability predictions."""
-        with torch.no_grad():
+        with _temporary_eval(self), torch.no_grad():
             logits = self.forward(x)
             return F.softmax(logits, dim=1)
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """Get class predictions."""
-        with torch.no_grad():
+        with _temporary_eval(self), torch.no_grad():
             logits = self.forward(x)
             return torch.argmax(logits, dim=1)
 
@@ -138,6 +148,10 @@ class ResNetClassifier(nn.Module):
         dropout: float = 0.5,
     ):
         super().__init__()
+        if num_classes <= 0:
+            raise ValueError("num_classes must be positive")
+        if not 0.0 <= dropout < 1.0:
+            raise ValueError("dropout must be in the range [0, 1)")
         self.model_name = model_name
 
         # Load pretrained ResNet
@@ -172,7 +186,7 @@ class ResNetClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return cast(torch.Tensor, self.backbone(x))
 
-    def unfreeze_backbone(self, num_layers: Optional[int] = None):
+    def unfreeze_backbone(self, num_layers: int | None = None):
         """
         Unfreeze backbone layers for fine-tuning.
 
@@ -184,6 +198,8 @@ class ResNetClassifier(nn.Module):
             for param in self.backbone.parameters():
                 param.requires_grad = True
         else:
+            if num_layers <= 0:
+                raise ValueError("num_layers must be positive")
             # Unfreeze last n layers
             layers = list(self.backbone.children())
             for layer in layers[-num_layers:]:
@@ -192,13 +208,13 @@ class ResNetClassifier(nn.Module):
 
     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
         """Get probability predictions."""
-        with torch.no_grad():
+        with _temporary_eval(self), torch.no_grad():
             logits = self.forward(x)
             return F.softmax(logits, dim=1)
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """Get class predictions."""
-        with torch.no_grad():
+        with _temporary_eval(self), torch.no_grad():
             logits = self.forward(x)
             return torch.argmax(logits, dim=1)
 
@@ -206,7 +222,7 @@ class ResNetClassifier(nn.Module):
 def focal_loss(
     pred: torch.Tensor,
     target: torch.Tensor,
-    alpha: Optional[float] = 0.25,
+    alpha: float | None = 0.25,
     gamma: float = 2.0,
 ) -> torch.Tensor:
     """
@@ -230,6 +246,8 @@ def focal_loss(
     Returns:
         Scalar focal loss value
     """
+    if gamma < 0:
+        raise ValueError("gamma must be non-negative")
     ce_loss = F.cross_entropy(pred, target, reduction="none")
     pt = torch.exp(-ce_loss)
 
@@ -259,13 +277,12 @@ class EnsembleClassifier(nn.Module):
         strategy: str = "average",
     ):
         super().__init__()
+        if len(models) == 0:
+            raise ValueError("EnsembleClassifier requires at least one model")
         self.models = nn.ModuleList(models)
         self.strategy = strategy
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if len(self.models) == 0:
-            raise ValueError("EnsembleClassifier requires at least one model")
-
         if self.strategy not in ("average", "max"):
             raise ValueError(f"Unknown strategy: {self.strategy}")
 
@@ -277,3 +294,13 @@ class EnsembleClassifier(nn.Module):
         if self.strategy == "max":
             return cast(torch.Tensor, stacked.max(dim=0)[0])
         raise ValueError(f"Unknown strategy: {self.strategy}")
+
+
+@contextmanager
+def _temporary_eval(module: nn.Module) -> Iterator[None]:
+    was_training = bool(module.training)
+    module.eval()
+    try:
+        yield
+    finally:
+        module.train(was_training)

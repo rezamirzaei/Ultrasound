@@ -21,6 +21,26 @@ from ultrasound.api.repositories.dataset_support import DatasetRepositorySupport
 class IndustrialRepository(DatasetRepositorySupport):
     """Persist and read industrial image datasets and training artifacts."""
 
+    @classmethod
+    def _normalize_dataset_name(cls, dataset_name: str) -> str:
+        normalized_dataset = dataset_name.strip().lower()
+        if normalized_dataset not in cls.INDUSTRIAL_DATASETS:
+            raise ValueError(
+                f"Invalid industrial dataset '{dataset_name}'. Expected one of {cls.INDUSTRIAL_DATASETS}."
+            )
+        return normalized_dataset
+
+    @staticmethod
+    def _normalize_split(split: str) -> str:
+        return split.strip().lower()
+
+    @staticmethod
+    def _normalize_class_name(class_name: str) -> str:
+        normalized_class = re.sub(r"[^a-zA-Z0-9_-]+", "_", class_name.strip().lower()).strip("_")
+        if not normalized_class:
+            raise ValueError("class_name must not be empty")
+        return normalized_class
+
     def sync_industrial_from_filesystem(self) -> int:
         fingerprint = self._compute_industrial_fingerprint()
         if self._meta_get("industrial_fingerprint") == fingerprint:
@@ -74,20 +94,14 @@ class IndustrialRepository(DatasetRepositorySupport):
         image_blob: bytes,
         annotation_blob: bytes | None = None,
     ) -> IndustrialUploadRecord:
-        normalized_dataset = dataset_name.strip().lower()
-        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
-            raise ValueError(
-                f"Invalid dataset '{dataset_name}'. Expected one of {self.INDUSTRIAL_DATASETS}."
-            )
-        normalized_split = split.strip().lower()
+        normalized_dataset = self._normalize_dataset_name(dataset_name)
+        normalized_split = self._normalize_split(split)
         allowed_splits = self.INDUSTRIAL_SPLITS[normalized_dataset]
         if normalized_split not in allowed_splits:
             raise ValueError(
                 f"Invalid split '{split}' for dataset '{normalized_dataset}'. Expected one of {sorted(allowed_splits)}."
             )
-        normalized_class = re.sub(r"[^a-zA-Z0-9_-]+", "_", class_name.strip().lower()).strip("_")
-        if not normalized_class:
-            raise ValueError("class_name must not be empty")
+        normalized_class = self._normalize_class_name(class_name)
 
         image_png, width, height = self._canonical_png_rgb_bytes(image_blob)
         safe_filename = self._safe_filename(
@@ -161,11 +175,7 @@ class IndustrialRepository(DatasetRepositorySupport):
         self, dataset_name: str
     ) -> tuple[list[IndustrialTrainingSampleRecord], dict[str, int], list[str]]:
         self._ensure_industrial_seeded()
-        normalized_dataset = dataset_name.strip().lower()
-        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
-            raise ValueError(
-                f"Invalid industrial dataset '{dataset_name}'. Expected one of {self.INDUSTRIAL_DATASETS}."
-            )
+        normalized_dataset = self._normalize_dataset_name(dataset_name)
 
         with self.db.session_scope() as session:
             rows = session.scalars(
@@ -209,7 +219,7 @@ class IndustrialRepository(DatasetRepositorySupport):
         n_test = sum(1 for sample in parsed_samples if sample.split == "test")
         if n_train <= 0 or n_test <= 0:
             rebuilt: list[IndustrialTrainingSampleRecord] = []
-            train_cutoff = max(1, int(round(0.8 * len(parsed_samples))))
+            train_cutoff = self._resolve_train_cutoff(len(parsed_samples))
             for index, sample in enumerate(parsed_samples):
                 rebuilt_split: Literal["train", "test"] = "train" if index < train_cutoff else "test"
                 rebuilt.append(sample.model_copy(update={"split": rebuilt_split}))
@@ -241,11 +251,7 @@ class IndustrialRepository(DatasetRepositorySupport):
 
     def get_industrial_annotation_count(self, dataset_name: str) -> int:
         self._ensure_industrial_seeded()
-        normalized_dataset = dataset_name.strip().lower()
-        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
-            raise ValueError(
-                f"Invalid industrial dataset '{dataset_name}'. Expected one of {self.INDUSTRIAL_DATASETS}."
-            )
+        normalized_dataset = self._normalize_dataset_name(dataset_name)
         with self.db.session_scope() as session:
             count = int(
                 session.scalar(
@@ -266,8 +272,12 @@ class IndustrialRepository(DatasetRepositorySupport):
         index: int = 0,
     ) -> IndustrialSampleRecord:
         self._ensure_industrial_seeded()
-        if dataset_name not in self.INDUSTRIAL_DATASETS:
-            raise FileNotFoundError(f"Dataset '{dataset_name}' not found. Available: {self.INDUSTRIAL_DATASETS}")
+        try:
+            normalized_dataset = self._normalize_dataset_name(dataset_name)
+            normalized_class = self._normalize_class_name(class_name)
+        except ValueError as exc:
+            raise FileNotFoundError(str(exc)) from exc
+        normalized_split = self._normalize_split(split)
         if index < 0:
             raise ValueError("sample index must be >= 0")
 
@@ -275,24 +285,24 @@ class IndustrialRepository(DatasetRepositorySupport):
             total_samples = int(
                 session.scalar(
                     select(func.count(IndustrialSampleORM.id)).where(
-                        IndustrialSampleORM.dataset_name == dataset_name,
-                        IndustrialSampleORM.split == split,
-                        IndustrialSampleORM.class_name == class_name,
+                        IndustrialSampleORM.dataset_name == normalized_dataset,
+                        IndustrialSampleORM.split == normalized_split,
+                        IndustrialSampleORM.class_name == normalized_class,
                     )
                 )
                 or 0
             )
             if total_samples <= 0:
                 raise FileNotFoundError(
-                    f"No industrial samples found for {dataset_name}/{split}/{class_name} in database storage."
+                    f"No industrial samples found for {normalized_dataset}/{normalized_split}/{normalized_class} in database storage."
                 )
             resolved_index = int(index % total_samples)
             sample = session.scalars(
                 select(IndustrialSampleORM)
                 .where(
-                    IndustrialSampleORM.dataset_name == dataset_name,
-                    IndustrialSampleORM.split == split,
-                    IndustrialSampleORM.class_name == class_name,
+                    IndustrialSampleORM.dataset_name == normalized_dataset,
+                    IndustrialSampleORM.split == normalized_split,
+                    IndustrialSampleORM.class_name == normalized_class,
                 )
                 .order_by(IndustrialSampleORM.image_filename)
                 .offset(resolved_index)
@@ -301,13 +311,13 @@ class IndustrialRepository(DatasetRepositorySupport):
 
         if sample is None:
             raise FileNotFoundError(
-                f"Could not fetch industrial sample for {dataset_name}/{split}/{class_name} at index {index}."
+                f"Could not fetch industrial sample for {normalized_dataset}/{normalized_split}/{normalized_class} at index {index}."
             )
 
         return IndustrialSampleRecord(
-            dataset_name=dataset_name,
-            split=split,
-            class_name=class_name,
+            dataset_name=normalized_dataset,
+            split=normalized_split,
+            class_name=normalized_class,
             requested_index=int(index),
             resolved_index=resolved_index,
             total_samples=total_samples,
@@ -333,11 +343,7 @@ class IndustrialRepository(DatasetRepositorySupport):
         return run.model_copy(update={"run_id": run_id})
 
     def get_latest_industrial_training_run(self, dataset_name: str) -> IndustrialTrainingRunRecord | None:
-        normalized_dataset = dataset_name.strip().lower()
-        if normalized_dataset not in self.INDUSTRIAL_DATASETS:
-            raise ValueError(
-                f"Invalid industrial dataset '{dataset_name}'. Expected one of {self.INDUSTRIAL_DATASETS}."
-            )
+        normalized_dataset = self._normalize_dataset_name(dataset_name)
         with self.db.session_scope() as session:
             row = session.scalars(
                 select(IndustrialTrainingRunORM)
