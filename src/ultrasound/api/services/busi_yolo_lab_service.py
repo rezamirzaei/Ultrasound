@@ -81,7 +81,10 @@ class BusiYoloLabService:
         model_path = self._model_path()
         if model_path.exists():
             return str(model_path)
-        return self.yolo_service.DEFAULT_MODEL_CANDIDATES[0]
+        default_candidates = tuple(self.yolo_service.DEFAULT_MODEL_CANDIDATES)
+        if default_candidates:
+            return default_candidates[0]
+        return "yolo11n.pt"
 
     def model_status(self) -> BusiYoloModelStatus:
         model_path = self._model_path()
@@ -130,8 +133,16 @@ class BusiYoloLabService:
 
         url = self.RECOMMENDED_MODEL_SOURCE_URL
         logger.info("Downloading BUSI YOLO weights from %s -> %s", url, model_path)
-        manifest = download_url_to_path(url, model_path)
-        write_manifest(self._manifest_path(), manifest)
+        try:
+            manifest = download_url_to_path(url, model_path)
+        except Exception as exc:
+            raise DependencyUnavailableError(
+                f"Could not download recommended BUSI YOLO weights: {exc}"
+            ) from exc
+        try:
+            write_manifest(self._manifest_path(), manifest)
+        except OSError:
+            logger.warning("Could not write BUSI YOLO model manifest to %s", self._manifest_path(), exc_info=True)
 
         return self.model_status()
 

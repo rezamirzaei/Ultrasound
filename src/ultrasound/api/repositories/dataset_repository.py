@@ -32,6 +32,8 @@ class DatasetRepository:
         self.sync_from_sources()
 
     def sync_from_sources(self) -> None:
+        # Preserve the historical eager sync used at app startup. Industrial
+        # datasets can be materially larger, so that repository seeds lazily.
         self.busi.sync_busi_from_filesystem()
         self.ndt.sync_ndt_from_filesystem()
 
@@ -75,7 +77,12 @@ class DatasetRepository:
         return self.industrial.get_industrial_annotation_count(dataset_name)
 
     def get_industrial_sample(self, dataset_name: str, split: str, class_name: str, index: int = 0):
-        return self.industrial.get_industrial_sample(dataset_name=dataset_name, split=split, class_name=class_name, index=index)
+        return self.industrial.get_industrial_sample(
+            dataset_name=dataset_name,
+            split=split,
+            class_name=class_name,
+            index=index,
+        )
 
     def save_industrial_training_run(self, run):
         return self.industrial.save_industrial_training_run(run)

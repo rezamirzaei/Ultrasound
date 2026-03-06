@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import pytest
 
+import ultrasound.api.services.busi_yolo_lab_service as busi_yolo_module
 from ultrasound.api.config import AppConfig
 from ultrasound.api.models.domain import BusiSampleRecord
 from ultrasound.api.models.schemas import (
+    DownloadedAssetManifest,
     YoloPredictRequest,
     YoloPredictResponse,
     YoloStatusResponse,
@@ -17,7 +21,12 @@ from ultrasound.api.models.schemas import (
 from ultrasound.api.services.busi_yolo_lab_service import BusiYoloLabService
 from ultrasound.api.services.liver_yolo_lab_service import LiverYoloLabService
 from ultrasound.api.services.media_service import MediaService
-from ultrasound.api.services.service_errors import InvalidRequestError
+from ultrasound.api.services.service_errors import (
+    DependencyUnavailableError,
+    InvalidRequestError,
+    NotFoundError,
+)
+from ultrasound.api.services.yolo_utils import write_manifest
 from ultrasound.data.liver_dataset import create_synthetic_liver_dataset
 
 
@@ -48,6 +57,19 @@ class _RecordingYoloService:
         )
 
 
+class _NoDefaultYoloService(_RecordingYoloService):
+    DEFAULT_MODEL_CANDIDATES: tuple[str, ...] = ()
+
+
+class _FailingYoloService(_RecordingYoloService):
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    def predict(self, image_rgb: np.ndarray, request: YoloPredictRequest) -> YoloPredictResponse:
+        raise self.error
+
+
 class _DatasetRepositoryStub:
     def get_busi_sample(self, class_name: str, index: int) -> BusiSampleRecord:
         image = np.zeros((32, 32, 3), dtype=np.uint8)
@@ -62,6 +84,16 @@ class _DatasetRepositoryStub:
             image_rgb=image,
             mask=mask,
         )
+
+
+class _MissingDatasetRepositoryStub:
+    def get_busi_sample(self, class_name: str, index: int) -> BusiSampleRecord:
+        raise FileNotFoundError(f"missing {class_name}:{index}")
+
+
+class _InvalidDatasetRepositoryStub:
+    def get_busi_sample(self, class_name: str, index: int) -> BusiSampleRecord:
+        raise ValueError(f"invalid {class_name}:{index}")
 
 
 def _make_config(tmp_path: Path) -> AppConfig:
@@ -117,6 +149,157 @@ def test_busi_predict_rejects_missing_explicit_recommended_model(tmp_path: Path)
         assert "not downloaded yet" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("expected InvalidRequestError")
+
+
+def test_busi_default_model_falls_back_to_builtin_when_candidates_missing(tmp_path: Path) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_NoDefaultYoloService(),
+    )
+
+    assert service.default_model == "yolo11n.pt"
+
+
+def test_busi_model_status_uses_manifest_metadata(tmp_path: Path) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_RecordingYoloService(),
+    )
+    model_path = service._model_path()
+    model_path.write_bytes(b"weights")
+    write_manifest(
+        service._manifest_path(),
+        DownloadedAssetManifest(
+            source_url=service.RECOMMENDED_MODEL_SOURCE_URL,
+            downloaded_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            sha256="a" * 64,
+            size_bytes=7,
+        ),
+    )
+
+    status = service.model_status()
+
+    assert status.downloaded is True
+    assert status.sha256 == "a" * 64
+    assert status.size_bytes == len(b"weights")
+
+
+def test_busi_download_recommended_model_persists_manifest(tmp_path: Path, monkeypatch) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_RecordingYoloService(),
+    )
+
+    def _download(_url: str, dest_path: Path) -> DownloadedAssetManifest:
+        dest_path.write_bytes(b"weights")
+        return DownloadedAssetManifest(
+            source_url=service.RECOMMENDED_MODEL_SOURCE_URL,
+            downloaded_at=datetime.now(tz=timezone.utc),
+            sha256="b" * 64,
+            size_bytes=7,
+        )
+
+    monkeypatch.setattr(busi_yolo_module, "download_url_to_path", _download)
+
+    status = service.download_recommended_model()
+
+    assert status.downloaded is True
+    assert status.sha256 == "b" * 64
+    assert service._manifest_path().exists()
+
+
+def test_busi_download_recommended_model_maps_failures(tmp_path: Path, monkeypatch) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_RecordingYoloService(),
+    )
+    monkeypatch.setattr(
+        busi_yolo_module,
+        "download_url_to_path",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("offline")),
+    )
+
+    with pytest.raises(DependencyUnavailableError, match="Could not download recommended BUSI YOLO weights"):
+        service.download_recommended_model(force=True)
+
+
+def test_busi_get_sample_leaves_normal_masks_unlabeled(tmp_path: Path) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_RecordingYoloService(),
+    )
+
+    sample = service.get_sample("normal", 0)
+
+    assert sample.sample.class_name == "normal"
+    assert sample.bbox_xyxy is not None
+    assert sample.yolo_labels == []
+    assert sample.raw_yolo_labels == ""
+
+
+@pytest.mark.parametrize(
+    ("repository", "error_type"),
+    [
+        (_MissingDatasetRepositoryStub(), NotFoundError),
+        (_InvalidDatasetRepositoryStub(), InvalidRequestError),
+    ],
+)
+def test_busi_sample_loading_maps_repository_errors(
+    tmp_path: Path,
+    repository: Any,
+    error_type: type[Exception],
+) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=repository,
+        media_service=MediaService(),
+        yolo_service=_RecordingYoloService(),
+    )
+
+    with pytest.raises(error_type):
+        service.get_sample("benign", 0)
+
+
+def test_busi_predict_maps_runtime_failures(tmp_path: Path) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_FailingYoloService(RuntimeError("ultralytics missing")),
+    )
+
+    with pytest.raises(DependencyUnavailableError, match="ultralytics missing"):
+        service.predict("benign", 0, YoloPredictRequest(model="yolov8n.pt"))
+
+
+def test_busi_predict_maps_value_failures(tmp_path: Path) -> None:
+    config = _make_config(tmp_path)
+    service = BusiYoloLabService(
+        config=config,
+        dataset_repository=_DatasetRepositoryStub(),
+        media_service=MediaService(),
+        yolo_service=_FailingYoloService(ValueError("invalid request")),
+    )
+
+    with pytest.raises(InvalidRequestError, match="invalid request"):
+        service.predict("benign", 0, YoloPredictRequest(model="yolov8n.pt"))
 
 
 def test_liver_service_accepts_case_insensitive_category_and_synthetic_dataset(tmp_path: Path) -> None:

@@ -30,8 +30,13 @@ from ultrasound.preprocessing.speckle import SpeckleReducer
 from ultrasound.utils.visualization import plot_preprocessing_comparison, plot_speckle_analysis
 
 
+def _ensure_output_dir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+
+
 def demo_preprocessing(image: np.ndarray, output_dir: Path) -> dict[str, np.ndarray]:
     """Demonstrate preprocessing techniques for ultrasound images."""
+    _ensure_output_dir(output_dir)
     print("\n" + "=" * 60)
     print("PREPROCESSING DEMONSTRATION")
     print("=" * 60)
@@ -100,6 +105,7 @@ def demo_preprocessing(image: np.ndarray, output_dir: Path) -> dict[str, np.ndar
 
 def demo_segmentation(output_dir: Path) -> None:
     """Demonstrate segmentation models."""
+    _ensure_output_dir(output_dir)
     print("\n" + "=" * 60)
     print("SEGMENTATION MODEL DEMONSTRATION")
     print("=" * 60)
@@ -147,6 +153,7 @@ def demo_segmentation(output_dir: Path) -> None:
 
 def demo_classification(output_dir: Path) -> None:
     """Demonstrate classification models."""
+    _ensure_output_dir(output_dir)
     print("\n" + "=" * 60)
     print("CLASSIFICATION MODEL DEMONSTRATION")
     print("=" * 60)
@@ -160,13 +167,22 @@ def demo_classification(output_dir: Path) -> None:
     print("   Classes: 2 (benign, malignant)")
     print(f"   Parameters: {custom_params:,}")
 
-    resnet_model = ResNetClassifier(num_classes=2, pretrained=True, model_name="resnet18")
+    pretrained_backbone = True
+    try:
+        resnet_model = ResNetClassifier(num_classes=2, pretrained=True, model_name="resnet18")
+    except Exception as exc:
+        pretrained_backbone = False
+        print(f"   Pretrained weights unavailable ({exc}); falling back to random initialization")
+        resnet_model = ResNetClassifier(num_classes=2, pretrained=False, model_name="resnet18")
     resnet_params = sum(p.numel() for p in resnet_model.parameters())
     resnet_trainable = sum(p.numel() for p in resnet_model.parameters() if p.requires_grad)
 
     print("\nResNet-18 Transfer Learning:")
     print("-" * 40)
-    print("   Pretrained on ImageNet")
+    if pretrained_backbone:
+        print("   Pretrained on ImageNet")
+    else:
+        print("   Using randomly initialized backbone")
     print(f"   Total parameters: {resnet_params:,}")
     print(f"   Trainable parameters: {resnet_trainable:,}")
     print("   Frozen backbone for initial training")
@@ -183,6 +199,7 @@ def demo_classification(output_dir: Path) -> None:
 
 def demo_admm_optimization(image: np.ndarray, output_dir: Path) -> None:
     """Detailed ADMM optimization demo for TV denoising."""
+    _ensure_output_dir(output_dir)
     print("\n" + "=" * 60)
     print("ADMM OPTIMIZATION DEMONSTRATION")
     print("=" * 60)
@@ -227,6 +244,8 @@ def demo_admm_optimization(image: np.ndarray, output_dir: Path) -> None:
 
 def demo_full_pipeline(data_dir: Path, output_dir: Path) -> None:
     """Demonstrate an end-to-end dataset loading and visualization flow."""
+    _ensure_output_dir(output_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
     print("\n" + "=" * 60)
     print("FULL PIPELINE DEMONSTRATION")
     print("=" * 60)
@@ -301,7 +320,7 @@ def main(demos: Sequence[str], output_dir: Path, data_dir: Path) -> None:
     print("ULTRASOUND IMAGING TOOLKIT")
     print("=" * 60)
 
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     data_dir.mkdir(parents=True, exist_ok=True)
 
     test_image: np.ndarray | None = None
