@@ -68,13 +68,54 @@ class YoloService:
         self._models[weights] = model
         return model
 
+    def _candidate_weights(self, requested_weights: str) -> tuple[str, ...]:
+        requested = requested_weights.strip()
+        if not requested:
+            return self.DEFAULT_MODEL_CANDIDATES
+        if requested in self.DEFAULT_MODEL_CANDIDATES:
+            return (requested, *[item for item in self.DEFAULT_MODEL_CANDIDATES if item != requested])
+        return (requested,)
+
+    @staticmethod
+    def _resolve_class_name(names: Any, class_id: int) -> str | None:
+        if class_id < 0:
+            return None
+        if isinstance(names, dict):
+            value = names.get(class_id)
+            return str(value) if value is not None else None
+        if isinstance(names, (list, tuple)) and class_id < len(names):
+            return str(names[class_id])
+        return None
+
     def predict(self, image_rgb: np.ndarray, request: YoloPredictRequest) -> YoloPredictResponse:
         image = np.asarray(image_rgb, dtype=np.uint8)
         if image.ndim != 3 or image.shape[2] != 3:
             raise ValueError("YOLO inference expects an RGB image with shape [H, W, 3]")
+        if image.shape[0] == 0 or image.shape[1] == 0:
+            raise ValueError("YOLO inference expects a non-empty image")
 
-        weights = (request.model or "").strip() or self.DEFAULT_MODEL_CANDIDATES[-1]
-        model = self._load_model(weights)
+        weights = (request.model or "").strip()
+        model = None
+        selected_weights = ""
+        load_errors: list[str] = []
+        fallback_notes: list[str] = []
+        for candidate in self._candidate_weights(weights):
+            try:
+                model = self._load_model(candidate)
+                selected_weights = candidate
+                if weights and candidate != weights:
+                    fallback_notes.append(
+                        f"Requested model '{weights}' was unavailable; used fallback '{candidate}'."
+                    )
+                elif not weights and candidate != self.DEFAULT_MODEL_CANDIDATES[0]:
+                    fallback_notes.append(f"Default model fallback selected '{candidate}'.")
+                break
+            except RuntimeError:
+                raise
+            except ValueError as exc:
+                load_errors.append(str(exc))
+        if model is None:
+            raise ValueError(load_errors[0] if load_errors else "Failed to resolve a YOLO model.")
 
         try:
             result_list = model.predict(
@@ -90,12 +131,12 @@ class YoloService:
         if not result_list:
             return YoloPredictResponse(
                 generated_at=datetime.now(tz=timezone.utc),
-                model=weights,
+                model=selected_weights,
                 image_shape=[int(image.shape[0]), int(image.shape[1]), 3],
                 detections=[],
                 annotated_image_data_url=self.media_service.as_png_data_url(image),
                 backend="ultralytics",
-                notes="No results returned by YOLO backend.",
+                notes=" ".join([*fallback_notes, "No results returned by YOLO backend."]).strip(),
             )
 
         result = result_list[0]
@@ -119,12 +160,7 @@ class YoloService:
 
             for index in range(n):
                 class_id = int(cls[index]) if cls is not None else -1
-                class_name = None
-                try:
-                    if isinstance(names, dict) and class_id in names:
-                        class_name = str(names[class_id])
-                except Exception:
-                    class_name = None
+                class_name = self._resolve_class_name(names, class_id)
 
                 bbox = YoloXyxyBox(
                     x1=float(xyxy[index, 0]),
@@ -158,9 +194,10 @@ class YoloService:
 
         return YoloPredictResponse(
             generated_at=datetime.now(tz=timezone.utc),
-            model=weights,
+            model=selected_weights,
             image_shape=[int(image.shape[0]), int(image.shape[1]), 3],
             detections=detections,
             annotated_image_data_url=self.media_service.as_png_data_url(annotated_rgb),
             backend="ultralytics",
+            notes=" ".join(fallback_notes) or None,
         )

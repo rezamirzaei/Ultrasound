@@ -138,10 +138,49 @@ def _download_file(url: str, dest: Path) -> None:
 # Convert polygon JSONs → bounding-box CSV
 # ---------------------------------------------------------------------------
 
-def _polygon_to_bbox(polygon: list[list[float]]) -> tuple[float, float, float, float]:
-    """Convert polygon [[x,y], ...] to (x_min, y_min, x_max, y_max)."""
-    xs = [pt[0] for pt in polygon]
-    ys = [pt[1] for pt in polygon]
+def _extract_polygon_points(payload: object) -> list[tuple[float, float]]:
+    """Normalize supported JSON payload shapes into 2-D polygon points."""
+    if isinstance(payload, dict):
+        for key in ("points", "polygon", "segmentation"):
+            if key in payload:
+                return _extract_polygon_points(payload[key])
+        shapes = payload.get("shapes")
+        if isinstance(shapes, list):
+            for shape in shapes:
+                try:
+                    return _extract_polygon_points(shape)
+                except ValueError:
+                    continue
+        raise ValueError("polygon payload does not contain point coordinates")
+
+    if not isinstance(payload, list) or not payload:
+        raise ValueError("polygon payload must be a non-empty list")
+
+    if len(payload) == 1 and isinstance(payload[0], (list, dict)):
+        return _extract_polygon_points(payload[0])
+
+    points: list[tuple[float, float]] = []
+    for point in payload:
+        if not isinstance(point, list) or len(point) < 2:
+            raise ValueError("polygon points must be [x, y] pairs")
+        x = float(point[0])
+        y = float(point[1])
+        if not np.isfinite(x) or not np.isfinite(y):
+            raise ValueError("polygon coordinates must be finite")
+        points.append((x, y))
+
+    if len(points) < 2:
+        raise ValueError("polygon must contain at least two points")
+    return points
+
+
+def _polygon_to_bbox(polygon: object) -> tuple[float, float, float, float]:
+    """Convert a polygon payload into (x_min, y_min, x_max, y_max)."""
+    points = _extract_polygon_points(polygon)
+    xs = [pt[0] for pt in points]
+    ys = [pt[1] for pt in points]
+    if max(xs) <= min(xs) or max(ys) <= min(ys):
+        raise ValueError("polygon bounding box must have positive area")
     return min(xs), min(ys), max(xs), max(ys)
 
 
@@ -185,7 +224,7 @@ def _ensure_annotations_csv(paths: LiverDatasetPaths) -> Path:
                         "class_id": "0",
                         "category": category,
                     })
-                except (json.JSONDecodeError, IndexError, KeyError):
+                except (json.JSONDecodeError, IndexError, KeyError, TypeError, ValueError):
                     logger.warning("Skipping bad liver JSON: %s", liver_json)
 
             # Mass bbox (class_id=1) — only Benign/Malignant have masses
@@ -203,7 +242,7 @@ def _ensure_annotations_csv(paths: LiverDatasetPaths) -> Path:
                         "class_id": "1",
                         "category": category,
                     })
-                except (json.JSONDecodeError, IndexError, KeyError):
+                except (json.JSONDecodeError, IndexError, KeyError, TypeError, ValueError):
                     logger.warning("Skipping bad mass JSON: %s", mass_json)
 
     fieldnames = ["image_id", "x_min", "y_min", "x_max", "y_max", "class_id", "category"]
@@ -256,13 +295,33 @@ def load_annotations_csv(csv_path: Path) -> dict[str, list[dict[str, float]]]:
     with csv_path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         for row in reader:
-            image_id = row["image_id"].strip()
+            try:
+                image_id = row["image_id"].strip()
+                x_min = float(row["x_min"])
+                y_min = float(row["y_min"])
+                x_max = float(row["x_max"])
+                y_max = float(row["y_max"])
+                class_id = int(row.get("class_id", 0))
+            except (AttributeError, KeyError, TypeError, ValueError):
+                logger.warning("Skipping malformed annotation row in %s", csv_path)
+                continue
+
+            if not image_id:
+                logger.warning("Skipping annotation row with empty image_id in %s", csv_path)
+                continue
+            if not all(np.isfinite(value) for value in (x_min, y_min, x_max, y_max)):
+                logger.warning("Skipping non-finite annotation row for %s", image_id)
+                continue
+            if x_max <= x_min or y_max <= y_min or class_id < 0:
+                logger.warning("Skipping invalid annotation bounds for %s", image_id)
+                continue
+
             annotations.setdefault(image_id, []).append({
-                "x_min": float(row["x_min"]),
-                "y_min": float(row["y_min"]),
-                "x_max": float(row["x_max"]),
-                "y_max": float(row["y_max"]),
-                "class_id": int(row.get("class_id", 0)),
+                "x_min": x_min,
+                "y_min": y_min,
+                "x_max": x_max,
+                "y_max": y_max,
+                "class_id": class_id,
             })
     return annotations
 
@@ -355,4 +414,3 @@ def create_synthetic_liver_dataset(dest_dir: Path, *, n_samples: int = 30) -> Li
 
     logger.info("Created synthetic liver dataset: %d samples at %s", n_samples, dest_dir)
     return LiverDatasetPaths(root=dest_dir)
-

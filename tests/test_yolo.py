@@ -3,32 +3,30 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from ultrasound.data.liver_dataset import (
-    CLASS_NAMES,
-    LiverDatasetPaths,
-    create_synthetic_liver_dataset,
-    load_annotations_csv,
-    resolve_liver_paths,
-    summarize_dataset,
-)
-from ultrasound.api.services.yolo_trainer import (
-    YoloDatasetPreparer,
-    YoloTrainingConfig,
-)
+from ultrasound.api.models.schemas import YoloLabel, YoloXyxyBox
+from ultrasound.api.services.yolo_trainer import YoloDatasetPreparer, YoloTrainingConfig
 from ultrasound.api.services.yolo_utils import (
     format_yolo_labels,
     mask_to_xyxy,
     parse_yolo_txt_labels,
     xyxy_to_yolo_label,
 )
-from ultrasound.api.models.schemas import YoloLabel, YoloXyxyBox
-
+from ultrasound.data.liver_dataset import (
+    CLASS_NAMES,
+    LiverDatasetPaths,
+    _ensure_annotations_csv,
+    create_synthetic_liver_dataset,
+    load_annotations_csv,
+    resolve_liver_paths,
+    summarize_dataset,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -105,6 +103,75 @@ class TestLiverDataset:
 
     def test_class_names(self) -> None:
         assert CLASS_NAMES == ["liver", "mass"]
+
+    def test_build_annotations_csv_supports_polygon_dict_payloads(self, tmp_path: Path) -> None:
+        root = tmp_path / "liver"
+        image_dir = root / "Benign" / "Benign" / "image"
+        liver_dir = root / "Benign" / "Benign" / "segmentation" / "liver"
+        mass_dir = root / "Benign" / "Benign" / "segmentation" / "mass"
+        liver_dir.mkdir(parents=True, exist_ok=True)
+        mass_dir.mkdir(parents=True, exist_ok=True)
+        image_dir.mkdir(parents=True, exist_ok=True)
+
+        Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(image_dir / "case_001.png")
+        (liver_dir / "case_001.json").write_text(
+            json.dumps({"points": [[4, 5], [20, 5], [20, 24], [4, 24]]}),
+            encoding="utf-8",
+        )
+        (mass_dir / "case_001.json").write_text(
+            json.dumps({"points": [["bad", 1], [2, 3]]}),
+            encoding="utf-8",
+        )
+
+        csv_path = _ensure_annotations_csv(LiverDatasetPaths(root=root))
+        annotations = load_annotations_csv(csv_path)
+
+        assert list(annotations) == ["Benign_case_001"]
+        assert len(annotations["Benign_case_001"]) == 1
+        assert annotations["Benign_case_001"][0]["class_id"] == 0
+
+    def test_load_annotations_csv_skips_invalid_rows(self, tmp_path: Path) -> None:
+        csv_path = tmp_path / "annotations.csv"
+        with csv_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=["image_id", "x_min", "y_min", "x_max", "y_max", "class_id"],
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "image_id": "ok",
+                    "x_min": "1",
+                    "y_min": "2",
+                    "x_max": "10",
+                    "y_max": "12",
+                    "class_id": "0",
+                }
+            )
+            writer.writerow(
+                {
+                    "image_id": "bad_bounds",
+                    "x_min": "9",
+                    "y_min": "2",
+                    "x_max": "5",
+                    "y_max": "12",
+                    "class_id": "0",
+                }
+            )
+            writer.writerow(
+                {
+                    "image_id": "",
+                    "x_min": "1",
+                    "y_min": "2",
+                    "x_max": "3",
+                    "y_max": "4",
+                    "class_id": "0",
+                }
+            )
+
+        annotations = load_annotations_csv(csv_path)
+
+        assert list(annotations) == ["ok"]
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +310,36 @@ class TestYoloUtils:
         with pytest.raises(ValueError, match="expected 5 columns"):
             parse_yolo_txt_labels("0 0.5 0.5", class_names=["liver"])
 
+    def test_parse_labels_without_class_names_accepts_multiclass_ids(self) -> None:
+        parsed = parse_yolo_txt_labels("2 0.5 0.5 0.2 0.2\n")
+        assert len(parsed) == 1
+        assert parsed[0].class_id == 2
+        assert parsed[0].class_name is None
 
+    def test_xyxy_to_yolo_label_clips_to_image_bounds(self) -> None:
+        bbox = YoloXyxyBox(x1=90.0, y1=95.0, x2=140.0, y2=160.0)
+        label = xyxy_to_yolo_label(
+            bbox=bbox,
+            class_id=0,
+            class_name="liver",
+            image_width=100,
+            image_height=100,
+        )
+        assert 0.0 <= label.x_center <= 1.0
+        assert 0.0 <= label.y_center <= 1.0
+        assert 0.0 < label.width <= 1.0
+        assert 0.0 < label.height <= 1.0
+
+    def test_xyxy_to_yolo_label_rejects_inverted_boxes(self) -> None:
+        bbox = YoloXyxyBox(x1=10.0, y1=20.0, x2=5.0, y2=25.0)
+        with pytest.raises(ValueError, match="x2 >= x1"):
+            xyxy_to_yolo_label(
+                bbox=bbox,
+                class_id=0,
+                class_name="liver",
+                image_width=100,
+                image_height=100,
+            )
 
 
 

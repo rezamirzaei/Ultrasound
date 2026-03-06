@@ -17,7 +17,6 @@ from ultrasound.api.models.schemas import (
     YoloXyxyBox,
 )
 
-
 # ---------------------------------------------------------------------------
 # Asset manifest helpers
 # ---------------------------------------------------------------------------
@@ -112,6 +111,17 @@ def xyxy_to_yolo_label(
 
     x1, y1 = float(bbox.x1), float(bbox.y1)
     x2, y2 = float(bbox.x2), float(bbox.y2)
+    if x2 < x1 or y2 < y1:
+        raise ValueError("bbox coordinates must satisfy x2 >= x1 and y2 >= y1")
+
+    max_x = float(image_width - 1)
+    max_y = float(image_height - 1)
+    x1 = min(max(x1, 0.0), max_x)
+    y1 = min(max(y1, 0.0), max_y)
+    x2 = min(max(x2, 0.0), max_x)
+    y2 = min(max(y2, 0.0), max_y)
+    if x2 < x1 or y2 < y1:
+        raise ValueError("bbox does not intersect image bounds")
 
     box_w = max(1.0, x2 - x1 + 1.0)
     box_h = max(1.0, y2 - y1 + 1.0)
@@ -150,7 +160,6 @@ def parse_yolo_txt_labels(
 ) -> list[YoloLabel]:
     """Parse a YOLO .txt payload into validated label rows."""
     safe_class_names = class_names or []
-    class_count = max(1, len(safe_class_names))
 
     parsed: list[YoloLabel] = []
     for line_number, raw in enumerate((labels_text or "").splitlines(), start=1):
@@ -169,9 +178,11 @@ def parse_yolo_txt_labels(
         except Exception as exc:
             raise ValueError(f"Invalid numeric values on line {line_number}") from exc
 
-        if class_id < 0 or class_id >= class_count:
+        if class_id < 0:
+            raise ValueError(f"class_id {class_id} must be non-negative on line {line_number}")
+        if safe_class_names and class_id >= len(safe_class_names):
             raise ValueError(
-                f"class_id {class_id} out of range (0..{class_count - 1}) on line {line_number}"
+                f"class_id {class_id} out of range (0..{len(safe_class_names) - 1}) on line {line_number}"
             )
 
         parsed.append(
@@ -186,4 +197,3 @@ def parse_yolo_txt_labels(
         )
 
     return parsed
-
