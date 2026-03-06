@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
 
 import numpy as np
 
@@ -18,13 +17,12 @@ from ultrasound.api.models.schemas import (
 from ultrasound.api.services.busi_yolo_lab_service import BusiYoloLabService
 from ultrasound.api.services.liver_yolo_lab_service import LiverYoloLabService
 from ultrasound.api.services.media_service import MediaService
-from ultrasound.api.services.yolo_service import YoloService
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
+from ultrasound.api.services.service_errors import InvalidRequestError
 from ultrasound.data.liver_dataset import create_synthetic_liver_dataset
 
 
 class _RecordingYoloService:
-    DEFAULT_MODEL_CANDIDATES = ("yolo11n.pt", "yolov8n.pt")
+    DEFAULT_MODEL_CANDIDATES: tuple[str, ...] = ("yolo11n.pt", "yolov8n.pt")
 
     def __init__(self) -> None:
         self.last_request: YoloPredictRequest | None = None
@@ -91,9 +89,9 @@ def test_busi_predict_uses_downloaded_recommended_model(tmp_path: Path) -> None:
     yolo_service = _RecordingYoloService()
     service = BusiYoloLabService(
         config=config,
-        dataset_repository=cast(DatasetRepository, _DatasetRepositoryStub()),
+        dataset_repository=_DatasetRepositoryStub(),
         media_service=MediaService(),
-        yolo_service=cast(YoloService, yolo_service),
+        yolo_service=yolo_service,
     )
     recommended = service._model_path()
     recommended.write_bytes(b"weights")
@@ -108,24 +106,24 @@ def test_busi_predict_rejects_missing_explicit_recommended_model(tmp_path: Path)
     config = _make_config(tmp_path)
     service = BusiYoloLabService(
         config=config,
-        dataset_repository=cast(DatasetRepository, _DatasetRepositoryStub()),
+        dataset_repository=_DatasetRepositoryStub(),
         media_service=MediaService(),
-        yolo_service=cast(YoloService, _RecordingYoloService()),
+        yolo_service=_RecordingYoloService(),
     )
 
     try:
         service.predict("benign", 0, YoloPredictRequest(model=str(service._model_path())))
-    except ValueError as exc:
+    except InvalidRequestError as exc:
         assert "not downloaded yet" in str(exc)
     else:  # pragma: no cover - defensive assertion
-        raise AssertionError("expected ValueError")
+        raise AssertionError("expected InvalidRequestError")
 
 
 def test_liver_service_accepts_case_insensitive_category_and_synthetic_dataset(tmp_path: Path) -> None:
     config = _make_config(tmp_path)
     create_synthetic_liver_dataset(config.data_dir / "liver_ultrasound_detection", n_samples=3)
     yolo_service = _RecordingYoloService()
-    service = LiverYoloLabService(config, MediaService(), cast(YoloService, yolo_service))
+    service = LiverYoloLabService(config, MediaService(), yolo_service)
 
     sample = service.get_sample("benign", 0)
     prediction = service.predict("BENIGN", 0, YoloPredictRequest(model="yolov8n.pt"))
@@ -143,7 +141,7 @@ def test_liver_service_prefers_trained_weights_when_present(tmp_path: Path) -> N
     trained.write_bytes(b"weights")
 
     yolo_service = _RecordingYoloService()
-    service = LiverYoloLabService(config, MediaService(), cast(YoloService, yolo_service))
+    service = LiverYoloLabService(config, MediaService(), yolo_service)
 
     service.predict("benign", 0, YoloPredictRequest(model="yolov8n.pt"))
 

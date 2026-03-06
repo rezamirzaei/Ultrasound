@@ -9,11 +9,13 @@ from typing import cast
 
 from ultrasound.api.models.domain import JobRunRecord
 from ultrasound.api.models.schemas import BusiTrainingRequest, IndustrialTrainingRequest
-from ultrasound.api.repositories.job_repository import JobRepository
-from ultrasound.api.services.busi_training_service import BusiTrainingService
-from ultrasound.api.services.data_ingestion_service import DataIngestionService
-from ultrasound.api.services.industrial_training_service import IndustrialTrainingService
-from ultrasound.api.services.observability_service import ObservabilityService
+from ultrasound.api.services.interfaces import (
+    BusiTrainingRunner,
+    DatasetResyncRunner,
+    IndustrialTrainingRunner,
+    JobQueueRepository,
+    ObservabilityRecorder,
+)
 
 logger = logging.getLogger("inphase.jobs")
 
@@ -23,11 +25,11 @@ class JobQueueService:
 
     def __init__(
         self,
-        repository: JobRepository,
-        busi_training_service: BusiTrainingService,
-        industrial_training_service: IndustrialTrainingService,
-        data_ingestion_service: DataIngestionService,
-        observability_service: ObservabilityService,
+        repository: JobQueueRepository,
+        busi_training_service: BusiTrainingRunner,
+        industrial_training_service: IndustrialTrainingRunner,
+        data_ingestion_service: DatasetResyncRunner,
+        observability_service: ObservabilityRecorder,
         poll_interval_seconds: float = 0.5,
     ) -> None:
         self.repository = repository

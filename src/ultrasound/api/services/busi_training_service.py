@@ -15,13 +15,13 @@ from ultrasound.api.models.schemas import (
     BusiTrainingRequest,
     BusiTrainingResponse,
 )
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
+from ultrasound.api.services.interfaces import BusiTrainingRepository
 
 
 class BusiTrainingService:
     """Runs lightweight BUSI training jobs and stores metrics/curves."""
 
-    def __init__(self, dataset_repository: DatasetRepository):
+    def __init__(self, dataset_repository: BusiTrainingRepository):
         self.dataset_repository = dataset_repository
 
     def _extract_features(self, image_rgb: np.ndarray) -> np.ndarray:

@@ -13,6 +13,7 @@ from ultrasound.api.models.schemas import (
     YoloPredictResponse,
     YoloStatusResponse,
 )
+from ultrasound.api.services.service_errors import ServiceError
 
 router = APIRouter(
     tags=["yolo"],
@@ -48,8 +49,8 @@ def get_liver_sample(
     """Load a liver ultrasound sample with bounding-box annotations."""
     try:
         return container.liver_yolo_lab_service.get_sample(category, sample_index)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.post(
@@ -65,9 +66,5 @@ def predict_liver_sample(
     """Run YOLO inference on a liver ultrasound sample."""
     try:
         return container.liver_yolo_lab_service.predict(category, sample_index, request)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

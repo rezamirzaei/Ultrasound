@@ -17,6 +17,7 @@ from ultrasound.api.services.error_analytics_service import ErrorAnalyticsServic
 from ultrasound.api.services.industrial_training_service import IndustrialTrainingService
 from ultrasound.api.services.job_queue_service import JobQueueService
 from ultrasound.api.services.liver_yolo_lab_service import LiverYoloLabService
+from ultrasound.api.services.liver_yolo_training_service import LiverYoloTrainingService
 from ultrasound.api.services.media_service import MediaService
 from ultrasound.api.services.ndt_detection_service import NdtDetectionService
 from ultrasound.api.services.observability_service import ObservabilityService
@@ -48,6 +49,7 @@ class ApplicationContainer:
             media_service=self.media_service,
             yolo_service=self.yolo_service,
         )
+        self.liver_yolo_training_service = LiverYoloTrainingService(config=self.config)
         self.busi_yolo_lab_service = BusiYoloLabService(
             config=self.config,
             dataset_repository=self.dataset_repository,

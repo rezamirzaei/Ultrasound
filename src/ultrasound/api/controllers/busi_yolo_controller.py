@@ -16,6 +16,7 @@ from ultrasound.api.models.schemas import (
     YoloPredictRequest,
     YoloPredictResponse,
 )
+from ultrasound.api.services.service_errors import ServiceError
 
 router = APIRouter(
     tags=["yolo-ultrasound"],
@@ -56,10 +57,8 @@ def get_busi_yolo_sample(
     """Return one BUSI sample with derived YOLO labels from its segmentation mask."""
     try:
         return container.busi_yolo_lab_service.get_sample(class_name, sample_index)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.post(
@@ -75,10 +74,5 @@ def predict_busi_yolo_sample(
     """Run YOLO inference on a BUSI sample image."""
     try:
         return container.busi_yolo_lab_service.predict(class_name, sample_index, request)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+    except ServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

@@ -39,7 +39,6 @@
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
-import numpy as np
 from _notebook_utils import (
     ensure_notebook_output_dir,
     ensure_src_on_path,
@@ -52,11 +51,8 @@ project_root = ensure_src_on_path()
 seed = set_reproducible_seed(42)
 output_dir = ensure_notebook_output_dir("02_preprocessing_workbench")
 
-from ultrasound.preprocessing.denoising import admm_tv_denoising
-from ultrasound.preprocessing.enhancement import ContrastEnhancer
-from ultrasound.preprocessing.speckle import SpeckleReducer
-from ultrasound.utils.metrics import compute_psnr, compute_rmse, compute_ssim
 from ultrasound.utils.visualization import plot_preprocessing_comparison
+from ultrasound.workflows import run_preprocessing_workbench
 
 print(f"Project root: {project_root}")
 print(f"Seed: {seed}")
@@ -66,8 +62,9 @@ print(f"Output directory: {output_dir}")
 # ## Load one BUSI sample
 
 # %%
-image_rgb, mask = load_busi_sample_arrays(class_name="malignant")
-gray = np.mean(image_rgb, axis=2).astype(np.uint8)
+image_rgb, _ = load_busi_sample_arrays(class_name="malignant")
+result = run_preprocessing_workbench(image_rgb)
+gray = result.gray
 
 fig, axes = plt.subplots(1, 2, figsize=(8, 3))
 axes[0].imshow(image_rgb)
@@ -84,24 +81,11 @@ plt.close(fig)
 # ## Speckle reduction + contrast enhancement + ADMM-TV denoising
 
 # %%
-lee = SpeckleReducer(method="lee", window_size=7)
-frost = SpeckleReducer(method="frost", window_size=5, damping_factor=1.5)
-median = SpeckleReducer(method="median", window_size=5)
-enhancer = ContrastEnhancer(method="clahe", clip_limit=2.5)
-
-img_lee = lee.reduce(gray)
-img_frost = frost.reduce(gray)
-img_median = median.reduce(gray)
-img_clahe = enhancer.enhance(gray)
-img_tv, convergence = admm_tv_denoising(gray, lambda_tv=0.06, rho=1.0, n_iter=35, verbose=False)
-
-processed = {
-    "Lee": img_lee,
-    "Frost": img_frost,
-    "Median": img_median,
-    "CLAHE": img_clahe,
-    "ADMM-TV": img_tv,
-}
+processed = result.processed
+img_lee = processed["Lee"]
+img_frost = processed["Frost"]
+img_tv = processed["ADMM-TV"]
+convergence = result.convergence
 
 fig = plot_preprocessing_comparison(gray, processed, figsize=(18, 4))
 fig.savefig(output_dir / "preprocessing_comparison.png", dpi=140, bbox_inches="tight")
@@ -117,28 +101,12 @@ plt.close(fig)
 # - Speckle CV: lower usually indicates stronger smoothing.
 
 # %%
-mean_val, cv_before = lee.estimate_speckle_level(gray)
-_, cv_after_lee = lee.estimate_speckle_level(img_lee)
-_, cv_after_frost = lee.estimate_speckle_level(img_frost)
-_, cv_after_tv = lee.estimate_speckle_level(img_tv)
-
-quality = {
-    "lee": {
-        "rmse": compute_rmse(img_lee, gray),
-        "psnr": compute_psnr(img_lee, gray, data_range=255.0),
-        "ssim": compute_ssim(img_lee, gray, data_range=255.0),
-    },
-    "frost": {
-        "rmse": compute_rmse(img_frost, gray),
-        "psnr": compute_psnr(img_frost, gray, data_range=255.0),
-        "ssim": compute_ssim(img_frost, gray, data_range=255.0),
-    },
-    "tv": {
-        "rmse": compute_rmse(img_tv, gray),
-        "psnr": compute_psnr(img_tv, gray, data_range=255.0),
-        "ssim": compute_ssim(img_tv, gray, data_range=255.0),
-    },
-}
+quality = result.quality
+mean_val = result.mean_intensity
+cv_before = result.speckle_cv["original"]
+cv_after_lee = result.speckle_cv["lee"]
+cv_after_frost = result.speckle_cv["frost"]
+cv_after_tv = result.speckle_cv["tv"]
 
 quality
 

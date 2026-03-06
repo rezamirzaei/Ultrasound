@@ -23,14 +23,13 @@ from ultrasound.api.models.schemas import (
     IndustrialTrainingRequest,
     IndustrialTrainingResponse,
 )
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
-from ultrasound.api.services.media_service import MediaService
+from ultrasound.api.services.interfaces import IndustrialTrainingRepository, MediaRenderer
 
 
 class IndustrialTrainingService:
     """Runs lightweight industrial learning and exposes segmentation diagnostics."""
 
-    def __init__(self, dataset_repository: DatasetRepository, media_service: MediaService):
+    def __init__(self, dataset_repository: IndustrialTrainingRepository, media_service: MediaRenderer):
         self.dataset_repository = dataset_repository
         self.media_service = media_service
 

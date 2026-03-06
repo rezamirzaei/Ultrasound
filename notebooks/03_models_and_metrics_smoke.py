@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from _notebook_utils import (
     ensure_notebook_output_dir,
     ensure_src_on_path,
@@ -50,17 +49,10 @@ from _notebook_utils import (
 
 project_root = ensure_src_on_path()
 seed = set_reproducible_seed(42)
-torch.manual_seed(seed)
 output_dir = ensure_notebook_output_dir("03_models_and_metrics_smoke")
 
-from ultrasound.models.classifier import ResNetClassifier, UltrasoundClassifier, focal_loss
-from ultrasound.models.unet import AttentionUNet, UNet, combined_loss, dice_loss
-from ultrasound.utils.metrics import (
-    compute_classification_metrics,
-    compute_confusion_matrix,
-    compute_segmentation_metrics,
-)
 from ultrasound.utils.visualization import plot_confusion_matrix
+from ultrasound.workflows import run_model_metric_smoke
 
 print(f"Project root: {project_root}")
 print(f"Seed: {seed}")
@@ -70,32 +62,9 @@ print(f"Output directory: {output_dir}")
 # ## Forward pass validation
 
 # %%
-x = torch.randn(2, 3, 128, 128)
-
-unet = UNet(in_channels=3, out_channels=1, features=[32, 64, 128, 256])
-attn_unet = AttentionUNet(in_channels=3, out_channels=1, features=[32, 64, 128, 256])
-cnn_classifier = UltrasoundClassifier(num_classes=2, in_channels=3, dropout=0.3)
-resnet_classifier = ResNetClassifier(
-    num_classes=2,
-    pretrained=False,
-    model_name="resnet18",
-    freeze_backbone=False,
-    dropout=0.3,
-)
-
-with torch.no_grad():
-    unet_logits = unet(x)
-    attn_logits = attn_unet(x)
-    cnn_logits = cnn_classifier(x)
-    resnet_logits = resnet_classifier(x)
-
-shapes = {
-    "input": list(x.shape),
-    "unet_logits": list(unet_logits.shape),
-    "attention_unet_logits": list(attn_logits.shape),
-    "cnn_logits": list(cnn_logits.shape),
-    "resnet_logits": list(resnet_logits.shape),
-}
+image, mask = load_busi_sample_arrays(class_name="benign")
+smoke = run_model_metric_smoke(image, mask, seed=seed)
+shapes = smoke.shapes
 shapes
 
 # %% [markdown]
@@ -108,14 +77,7 @@ shapes
 # ## Loss sanity check
 
 # %%
-seg_target = torch.randint(0, 2, (2, 1, 128, 128)).float()
-class_target = torch.randint(0, 2, (2,), dtype=torch.long)
-
-losses = {
-    "dice_loss": float(dice_loss(unet_logits, seg_target).item()),
-    "combined_loss": float(combined_loss(unet_logits, seg_target, bce_weight=0.5).item()),
-    "focal_loss": float(focal_loss(cnn_logits, class_target, alpha=0.25, gamma=2.0).item()),
-}
+losses = smoke.losses
 losses
 
 # %% [markdown]
@@ -127,24 +89,15 @@ losses
 # ## Metric sanity check with one BUSI mask
 
 # %%
-image, mask = load_busi_sample_arrays(class_name="benign")
-mask_bin = (mask > 0).astype(np.uint8)
-
-# Synthetic prediction for smoke check: slight horizontal shift.
-pred_mask = np.roll(mask_bin, shift=2, axis=1)
-
-seg_metrics = compute_segmentation_metrics(pred_mask, mask_bin)
+seg_metrics = smoke.segmentation_metrics
 seg_metrics
 
 # %% [markdown]
 # ## Classification metrics smoke check
 
 # %%
-y_true = np.array([0, 0, 0, 1, 1, 1, 1])
-y_pred = np.array([0, 0, 1, 1, 1, 0, 1])
-
-class_metrics = compute_classification_metrics(y_pred, y_true, class_names=["benign", "malignant"])
-cm = compute_confusion_matrix(y_pred, y_true)
+class_metrics = smoke.classification_metrics
+cm = smoke.confusion_matrix
 
 fig = plot_confusion_matrix(cm, class_names=["benign", "malignant"], normalize=False)
 fig.savefig(output_dir / "confusion_matrix.png", dpi=140, bbox_inches="tight")

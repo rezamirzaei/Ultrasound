@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from ultrasound.api.models.domain import BusiUploadRecord, IndustrialUploadRecord
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
+from ultrasound.api.services.interfaces import DatasetUploadRepository
 
 
 class DatasetUploadService:
     """Coordinates validated upload ingestion into ORM-backed dataset tables."""
 
-    def __init__(self, dataset_repository: DatasetRepository):
+    def __init__(self, dataset_repository: DatasetUploadRepository):
         self.dataset_repository = dataset_repository
 
     def upload_busi_sample(

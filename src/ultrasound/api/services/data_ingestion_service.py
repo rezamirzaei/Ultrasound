@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from ultrasound.api.models.schemas import DatasetResyncResponse
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
+from ultrasound.api.services.interfaces import DataIngestionRepository
 
 
 class DataIngestionService:
     """Manages controlled sync from source files into database tables."""
 
-    def __init__(self, dataset_repository: DatasetRepository):
+    def __init__(self, dataset_repository: DataIngestionRepository):
         self.dataset_repository = dataset_repository
 
     def resync_all(self) -> DatasetResyncResponse:

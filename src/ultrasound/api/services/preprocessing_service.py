@@ -12,8 +12,7 @@ from ultrasound.api.models.schemas import (
     PreprocessingPreviewResponse,
     PreprocessingRequest,
 )
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
-from ultrasound.api.services.media_service import MediaService
+from ultrasound.api.services.interfaces import BusiSampleRepository, MediaRenderer
 from ultrasound.preprocessing.denoising import admm_tv_denoising
 from ultrasound.preprocessing.enhancement import ContrastEnhancer
 from ultrasound.preprocessing.speckle import SpeckleReducer
@@ -23,7 +22,7 @@ from ultrasound.utils.metrics import compute_psnr, compute_rmse, compute_ssim
 class PreprocessingService:
     """Orchestrates preprocessing algorithm runs for API consumers."""
 
-    def __init__(self, dataset_repository: DatasetRepository, media_service: MediaService):
+    def __init__(self, dataset_repository: BusiSampleRepository, media_service: MediaRenderer):
         self.dataset_repository = dataset_repository
         self.media_service = media_service
 

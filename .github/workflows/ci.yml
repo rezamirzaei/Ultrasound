@@ -62,14 +62,11 @@ jobs:
         run: |
           INPHASE_DATABASE_URL=sqlite:////tmp/inphase-ci.sqlite3 alembic upgrade head
 
-      - name: Check formatting (black)
-        run: python -m black --check src/ tests/ main.py scripts/
-
-      - name: Check import ordering (isort)
-        run: python -m isort --check-only src/ tests/ main.py scripts/
+      - name: Lint (ruff)
+        run: python -m ruff check .
 
       - name: Type check (mypy)
-        run: python -m mypy --config-file pyproject.toml
+        run: python -m mypy ./
 
       - name: Run tests with coverage
         run: pytest tests/ -v --tb=short --cov=src/ultrasound --cov-report=term-missing --cov-fail-under=40

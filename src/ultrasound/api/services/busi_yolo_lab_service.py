@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from ultrasound.api.config import AppConfig
+from ultrasound.api.models.domain import BusiSampleRecord
 from ultrasound.api.models.schemas import (
     BusiSamplePreview,
     BusiYoloLabStatusResponse,
@@ -18,9 +19,13 @@ from ultrasound.api.models.schemas import (
     YoloPredictRequest,
     YoloPredictResponse,
 )
-from ultrasound.api.repositories.dataset_repository import DatasetRepository
-from ultrasound.api.services.media_service import MediaService
-from ultrasound.api.services.yolo_service import YoloService
+from ultrasound.api.services.interfaces import BusiSampleRepository, MediaRenderer, YoloPredictor
+from ultrasound.api.services.service_errors import (
+    DependencyUnavailableError,
+    InvalidRequestError,
+    NotFoundError,
+)
+from ultrasound.api.services.yolo_lab_support import prefer_existing_model
 from ultrasound.api.services.yolo_utils import (
     download_url_to_path,
     format_yolo_labels,
@@ -52,9 +57,9 @@ class BusiYoloLabService:
     def __init__(
         self,
         config: AppConfig,
-        dataset_repository: DatasetRepository,
-        media_service: MediaService,
-        yolo_service: YoloService,
+        dataset_repository: BusiSampleRepository,
+        media_service: MediaRenderer,
+        yolo_service: YoloPredictor,
     ):
         self.config = config
         self.dataset_repository = dataset_repository
@@ -110,6 +115,14 @@ class BusiYoloLabService:
             yolo_class_names=list(self.YOLO_CLASS_NAMES),
         )
 
+    def _load_sample(self, class_name: str, sample_index: int) -> BusiSampleRecord:
+        try:
+            return self.dataset_repository.get_busi_sample(class_name=class_name, index=sample_index)
+        except FileNotFoundError as exc:
+            raise NotFoundError(str(exc)) from exc
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
     def download_recommended_model(self, force: bool = False) -> BusiYoloModelStatus:
         model_path = self._model_path()
         if model_path.exists() and not force:
@@ -123,7 +136,7 @@ class BusiYoloLabService:
         return self.model_status()
 
     def get_sample(self, class_name: str, sample_index: int) -> BusiYoloSampleResponse:
-        sample = self.dataset_repository.get_busi_sample(class_name=class_name, index=sample_index)
+        sample = self._load_sample(class_name=class_name, sample_index=sample_index)
         mask_binary = np.asarray(sample.mask > 0, dtype=np.uint8) * 255
 
         lesion_pixels = int(np.count_nonzero(mask_binary))
@@ -163,24 +176,21 @@ class BusiYoloLabService:
         )
 
     def predict(self, class_name: str, sample_index: int, request: YoloPredictRequest) -> YoloPredictResponse:
-        model_path = Path(request.model).expanduser()
         recommended_path = self._model_path()
-        try:
-            requested_matches_recommended = model_path.resolve(strict=False) == recommended_path.resolve(
-                strict=False
-            )
-        except OSError:
-            requested_matches_recommended = model_path == recommended_path
-
-        if requested_matches_recommended and not recommended_path.exists():
-            raise ValueError(
+        request = prefer_existing_model(
+            request,
+            default_model_candidates=self.yolo_service.DEFAULT_MODEL_CANDIDATES,
+            preferred_model_path=recommended_path,
+            missing_explicit_preferred_message=(
                 "Recommended BUSI YOLO weights are not downloaded yet. "
                 "Call the model download endpoint first."
-            )
+            ),
+        )
 
-        generic_models = {"", *self.yolo_service.DEFAULT_MODEL_CANDIDATES}
-        if request.model.strip() in generic_models and recommended_path.exists():
-            request = request.model_copy(update={"model": str(recommended_path)})
-
-        sample = self.dataset_repository.get_busi_sample(class_name=class_name, index=sample_index)
-        return self.yolo_service.predict(image_rgb=sample.image_rgb, request=request)
+        sample = self._load_sample(class_name=class_name, sample_index=sample_index)
+        try:
+            return self.yolo_service.predict(image_rgb=sample.image_rgb, request=request)
+        except RuntimeError as exc:
+            raise DependencyUnavailableError(str(exc)) from exc
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc

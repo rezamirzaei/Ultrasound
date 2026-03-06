@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Literal
 
 from ultrasound.api.database.session import DatabaseSessionManager
 from ultrasound.api.models.domain import JobRunRecord
@@ -68,6 +69,20 @@ def test_job_worker_loop_survives_polling_errors(monkeypatch) -> None:
         def __init__(self) -> None:
             self.calls = 0
 
+        def enqueue(
+            self,
+            job_type: Literal["busi_training", "dataset_resync", "industrial_training"],
+            requested_by: str,
+            payload: dict[str, Any],
+        ) -> JobRunRecord:
+            raise AssertionError("enqueue should not be called")
+
+        def get_job(self, job_id: int) -> JobRunRecord | None:
+            raise AssertionError("get_job should not be called")
+
+        def list_jobs(self, limit: int = 50) -> list[JobRunRecord]:
+            raise AssertionError("list_jobs should not be called")
+
         def claim_next_pending(self) -> JobRunRecord | None:
             self.calls += 1
             if self.calls == 1:
@@ -75,16 +90,19 @@ def test_job_worker_loop_survives_polling_errors(monkeypatch) -> None:
             service._stop_event.set()
             return None
 
-        def mark_failed(self, job_id: int, error_message: str) -> None:
+        def mark_completed(self, job_id: int, result: dict[str, Any]) -> JobRunRecord:
+            raise AssertionError("mark_completed should not be called")
+
+        def mark_failed(self, job_id: int, error_message: str) -> JobRunRecord:
             raise AssertionError("mark_failed should not be called")
 
     repository = _RepositoryStub()
     service = JobQueueService(
-        repository=repository,  # type: ignore[arg-type]
-        busi_training_service=_NoopService(),  # type: ignore[arg-type]
-        industrial_training_service=_NoopService(),  # type: ignore[arg-type]
-        data_ingestion_service=_NoopService(),  # type: ignore[arg-type]
-        observability_service=observability,  # type: ignore[arg-type]
+        repository=repository,
+        busi_training_service=_NoopService(),
+        industrial_training_service=_NoopService(),
+        data_ingestion_service=_NoopService(),
+        observability_service=observability,
     )
     monkeypatch.setattr(service._stop_event, "wait", lambda _timeout=None: None)
 
