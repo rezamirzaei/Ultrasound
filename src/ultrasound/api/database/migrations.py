@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from alembic.config import Config
 
 logger = logging.getLogger("inphase.migrations")
 
@@ -13,7 +17,7 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def _alembic_config(database_url: str | None = None):
+def _alembic_config(database_url: str | None = None) -> Config:
     from alembic.config import Config
 
     root = _project_root()
@@ -24,7 +28,7 @@ def _alembic_config(database_url: str | None = None):
     return cfg
 
 
-def _legacy_stamp_revision(config: object) -> str:
+def _legacy_stamp_revision(config: Config) -> str:
     """Best-effort baseline revision for legacy pre-Alembic databases."""
     try:
         from alembic.script import ScriptDirectory

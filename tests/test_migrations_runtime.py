@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+from typing import Any
 
 
 def test_upgrade_to_head_stamps_baseline_then_retries(monkeypatch) -> None:
@@ -22,7 +23,7 @@ def test_upgrade_to_head_stamps_baseline_then_retries(monkeypatch) -> None:
         assert cfg is config
         calls.append(("stamp", revision))
 
-    fake_alembic = types.ModuleType("alembic")
+    fake_alembic: Any = types.ModuleType("alembic")
     fake_alembic.command = types.SimpleNamespace(upgrade=_upgrade, stamp=_stamp)
 
     monkeypatch.setitem(sys.modules, "alembic", fake_alembic)
@@ -46,7 +47,7 @@ def test_upgrade_to_head_re_raises_without_auto_stamp(monkeypatch) -> None:
         assert cfg is config
         raise RuntimeError("table auth_users already exists")
 
-    fake_alembic = types.ModuleType("alembic")
+    fake_alembic: Any = types.ModuleType("alembic")
     fake_alembic.command = types.SimpleNamespace(upgrade=_upgrade, stamp=lambda *_args: None)
 
     monkeypatch.setitem(sys.modules, "alembic", fake_alembic)
