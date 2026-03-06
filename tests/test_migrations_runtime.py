@@ -59,3 +59,46 @@ def test_upgrade_to_head_re_raises_without_auto_stamp(monkeypatch) -> None:
         assert "already exists" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("expected RuntimeError")
+
+
+def test_upgrade_to_head_skips_when_alembic_is_unavailable(monkeypatch, caplog) -> None:
+    import builtins
+
+    module = importlib.reload(importlib.import_module("ultrasound.api.database.migrations"))
+    original_import: Any = builtins.__import__
+
+    def _import(*args: Any, **kwargs: Any) -> Any:
+        if args and args[0] == "alembic":
+            raise ModuleNotFoundError("No module named 'alembic'")
+        return original_import(*args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _import)
+
+    with caplog.at_level("WARNING"):
+        module.upgrade_to_head()
+
+    assert "Skipping migration step" in caplog.text
+
+
+def test_alembic_config_prefers_explicit_database_url(monkeypatch) -> None:
+    module = importlib.reload(importlib.import_module("ultrasound.api.database.migrations"))
+
+    monkeypatch.setenv("INPHASE_DATABASE_URL", "sqlite:///env.db")
+    config = module._alembic_config(database_url="sqlite:///explicit.db")
+
+    assert config.get_main_option("sqlalchemy.url") == "sqlite:///explicit.db"
+
+
+def test_legacy_stamp_revision_falls_back_to_head_on_script_error(monkeypatch) -> None:
+    module = importlib.reload(importlib.import_module("ultrasound.api.database.migrations"))
+    fake_script_module = types.ModuleType("alembic.script")
+
+    class _ScriptDirectory:
+        @staticmethod
+        def from_config(_config: object) -> object:
+            raise RuntimeError("boom")
+
+    fake_script_module.ScriptDirectory = _ScriptDirectory  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "alembic.script", fake_script_module)
+
+    assert module._legacy_stamp_revision(object()) == "head"

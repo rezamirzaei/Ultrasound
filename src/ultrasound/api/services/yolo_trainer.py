@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import cv2
 import numpy as np
-from PIL import Image
 
 from ultrasound.api.models.schemas import YoloLabel, YoloXyxyBox
 from ultrasound.api.services.yolo_utils import format_yolo_labels, xyxy_to_yolo_label
@@ -113,9 +113,15 @@ class YoloDatasetPreparer:
     def prepare(self) -> Path:
         """Build the YOLO dataset directory and return the path to ``data.yaml``."""
         logger.info("Preparing YOLO dataset in %s", self.output_dir)
+        if not self.source_images_dir.is_dir():
+            raise FileNotFoundError(f"YOLO source images directory not found: {self.source_images_dir}")
+        if not self.annotations_csv.is_file():
+            raise FileNotFoundError(f"YOLO annotations CSV not found: {self.annotations_csv}")
 
         annotations = self._load_annotations()
-        image_ids = sorted(image_id for image_id in annotations if self._find_image(image_id) is not None)
+        image_ids = sorted(
+            image_id for image_id in annotations if self._find_image(image_id) is not None
+        )
         if not image_ids:
             raise FileNotFoundError(
                 f"No usable annotated images found. CSV={self.annotations_csv}, "
@@ -127,8 +133,10 @@ class YoloDatasetPreparer:
         train_ids, val_ids = self._split(image_ids)
         logger.info("Split: %d train / %d val", len(train_ids), len(val_ids))
 
-        for split_name, split_ids in [("train", train_ids), ("val", val_ids)]:
-            self._write_split(split_name, split_ids, annotations)
+        train_written = self._write_split("train", train_ids, annotations)
+        val_written = self._write_split("val", val_ids, annotations)
+        if train_written <= 0 or val_written <= 0:
+            raise ValueError("No readable images were written to one or more YOLO splits.")
 
         yaml_path = self._write_data_yaml()
         logger.info("Dataset YAML: %s", yaml_path)
@@ -207,23 +215,27 @@ class YoloDatasetPreparer:
         split_name: str,
         image_ids: list[str],
         annotations: dict[str, list[dict[str, Any]]],
-    ) -> None:
+    ) -> int:
         images_dir = self.output_dir / split_name / "images"
         labels_dir = self.output_dir / split_name / "labels"
         images_dir.mkdir(parents=True, exist_ok=True)
         labels_dir.mkdir(parents=True, exist_ok=True)
 
+        written = 0
         for image_id in image_ids:
             src_path = self._find_image(image_id)
             if src_path is None:
                 logger.warning("Image not found for id=%s, skipping.", image_id)
                 continue
 
+            image = cv2.imread(str(src_path), cv2.IMREAD_UNCHANGED)
+            if image is None:
+                logger.warning("Unreadable image for id=%s at %s, skipping.", image_id, src_path)
+                continue
+            img_h, img_w = image.shape[:2]
+
             dest_image = images_dir / src_path.name
             shutil.copy2(src_path, dest_image)
-
-            with Image.open(dest_image) as img:
-                img_w, img_h = img.size
 
             labels_text = format_yolo_labels(
                 [
@@ -233,6 +245,8 @@ class YoloDatasetPreparer:
             )
             label_path = labels_dir / f"{src_path.stem}.txt"
             label_path.write_text(labels_text, encoding="utf-8")
+            written += 1
+        return written
 
     def _xyxy_to_yolo_label(self, ann: dict[str, Any], img_w: int, img_h: int) -> YoloLabel:
         """Convert xyxy pixel coords to a validated YOLO label object."""

@@ -100,6 +100,11 @@ def download_liver_dataset(dest_dir: Path, *, force: bool = False) -> LiverDatas
         _ensure_flat_images(paths)
         return paths
 
+    if force:
+        paths.annotations_csv.unlink(missing_ok=True)
+        if paths.train_images_dir.exists():
+            shutil.rmtree(paths.train_images_dir)
+
     zip_path = dest_dir / "dataset.zip"
 
     # Download
@@ -121,19 +126,26 @@ def download_liver_dataset(dest_dir: Path, *, force: bool = False) -> LiverDatas
 
 
 def _download_file(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = dest.with_suffix(dest.suffix + ".tmp")
     req = urllib.request.Request(url, headers={"User-Agent": "inPhase-ultrasound-toolkit/1.0"})
-    with urllib.request.urlopen(req, timeout=600) as resp, dest.open("wb") as fh:
-        total = int(resp.headers.get("Content-Length", 0))
-        downloaded = 0
-        while True:
-            chunk = resp.read(1024 * 1024)
-            if not chunk:
-                break
-            fh.write(chunk)
-            downloaded += len(chunk)
-            if total:
-                pct = downloaded / total * 100
-                logger.info("  %.0f%% (%.1f / %.1f MB)", pct, downloaded / 1e6, total / 1e6)
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp, tmp_path.open("wb") as fh:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    pct = downloaded / total * 100
+                    logger.info("  %.0f%% (%.1f / %.1f MB)", pct, downloaded / 1e6, total / 1e6)
+        tmp_path.replace(dest)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +155,13 @@ def _download_file(url: str, dest: Path) -> None:
 def _extract_polygon_points(payload: object) -> list[tuple[float, float]]:
     """Normalize supported JSON payload shapes into 2-D polygon points."""
     if isinstance(payload, dict):
+        lowered = {str(key).lower(): value for key, value in payload.items()}
+        if "x" in lowered and "y" in lowered:
+            x = float(lowered["x"])
+            y = float(lowered["y"])
+            if not np.isfinite(x) or not np.isfinite(y):
+                raise ValueError("polygon coordinates must be finite")
+            return [(x, y)]
         for key in ("points", "polygon", "segmentation"):
             if key in payload:
                 return _extract_polygon_points(payload[key])
@@ -163,10 +182,17 @@ def _extract_polygon_points(payload: object) -> list[tuple[float, float]]:
 
     points: list[tuple[float, float]] = []
     for point in payload:
-        if not isinstance(point, list) or len(point) < 2:
+        if isinstance(point, dict):
+            lowered = {str(key).lower(): value for key, value in point.items()}
+            if "x" not in lowered or "y" not in lowered:
+                raise ValueError("polygon point dicts must contain x and y")
+            x = float(lowered["x"])
+            y = float(lowered["y"])
+        elif isinstance(point, (list, tuple)) and len(point) >= 2:
+            x = float(point[0])
+            y = float(point[1])
+        else:
             raise ValueError("polygon points must be [x, y] pairs")
-        x = float(point[0])
-        y = float(point[1])
         if not np.isfinite(x) or not np.isfinite(y):
             raise ValueError("polygon coordinates must be finite")
         points.append((x, y))
@@ -358,6 +384,8 @@ def summarize_dataset(paths: LiverDatasetPaths) -> dict[str, int | str]:
     else:
         summary["annotated_images"] = 0
         summary["total_boxes"] = 0
+        summary["liver_boxes"] = 0
+        summary["mass_boxes"] = 0
 
     summary["classes"] = ", ".join(CLASS_NAMES)
     return summary

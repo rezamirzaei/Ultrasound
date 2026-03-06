@@ -31,6 +31,7 @@ def load_manifest(path: Path) -> DownloadedAssetManifest | None:
 
 
 def write_manifest(path: Path, manifest: DownloadedAssetManifest) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(manifest.model_dump(mode="json"), indent=2, sort_keys=True),
         encoding="utf-8",
@@ -50,6 +51,12 @@ def download_url_to_path(
     user_agent: str = "inPhase-ultrasound-imaging-toolkit/1.0",
 ) -> DownloadedAssetManifest:
     """Download *url* to *dest_path* and return a manifest with SHA-256."""
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+    if chunk_bytes <= 0:
+        raise ValueError("chunk_bytes must be positive")
+
+    dest_path = Path(dest_path)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = dest_path.with_suffix(dest_path.suffix + ".tmp")
 
@@ -71,7 +78,11 @@ def download_url_to_path(
         tmp_path.unlink(missing_ok=True)
         raise
 
-    tmp_path.replace(dest_path)
+    try:
+        tmp_path.replace(dest_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
     return DownloadedAssetManifest(
         source_url=url,
         downloaded_at=datetime.now(tz=timezone.utc),
