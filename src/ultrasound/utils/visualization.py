@@ -8,8 +8,10 @@ Provides functions for:
 - ROC curves and confusion matrices
 """
 
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,18 +20,27 @@ from scipy.ndimage import uniform_filter
 from sklearn.metrics import auc, roc_curve
 from sklearn.preprocessing import label_binarize
 
+DEFAULT_OVERLAY_COLOR = (1.0, 0.0, 0.0)
+DEFAULT_TRAINING_METRICS = ("loss", "accuracy")
+FigurePath = str | Path | None
+
 # Custom colormap for ultrasound visualization
 ULTRASOUND_CMAP = LinearSegmentedColormap.from_list(
     "ultrasound", [(0, 0, 0), (0.2, 0.2, 0.2), (0.5, 0.5, 0.5), (0.8, 0.8, 0.8), (1, 1, 1)]
 )
 
 
+def _save_figure(fig: plt.Figure, save_path: FigurePath) -> None:
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+
 def visualize_results(
-    images: List[np.ndarray],
-    titles: List[str],
-    figsize: Tuple[int, int] = (15, 5),
+    images: Sequence[np.ndarray],
+    titles: Sequence[str],
+    figsize: tuple[int, int] = (15, 5),
     cmap: str = "gray",
-    save_path: Optional[str] = None,
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Visualize multiple images side by side.
@@ -44,13 +55,16 @@ def visualize_results(
     Returns:
         Matplotlib figure
     """
+    if not images:
+        raise ValueError("images must contain at least one image")
+    if len(images) != len(titles):
+        raise ValueError("images and titles must contain the same number of items")
+
     n = len(images)
     fig, axes = plt.subplots(1, n, figsize=figsize)
+    axes_array = np.atleast_1d(axes)
 
-    if n == 1:
-        axes = [axes]
-
-    for ax, img, title in zip(axes, images, titles):
+    for ax, img, title in zip(axes_array.flat, images, titles):
         if img.ndim == 3 and img.shape[2] == 3:
             ax.imshow(img)
         else:
@@ -58,19 +72,17 @@ def visualize_results(
         ax.set_title(title)
         ax.axis("off")
 
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig
 
 
 def plot_preprocessing_comparison(
     original: np.ndarray,
-    processed: Dict[str, np.ndarray],
-    figsize: Tuple[int, int] = (16, 4),
-    save_path: Optional[str] = None,
+    processed: Mapping[str, np.ndarray],
+    figsize: tuple[int, int] = (16, 4),
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Compare original and preprocessed ultrasound images.
@@ -84,25 +96,27 @@ def plot_preprocessing_comparison(
     Returns:
         Matplotlib figure
     """
+    if not processed:
+        raise ValueError("processed must contain at least one named image")
+
     n = len(processed) + 1
     fig, axes = plt.subplots(1, n, figsize=figsize)
+    axes_array = np.atleast_1d(axes)
 
     # Original image
-    axes[0].imshow(original, cmap="gray")
-    axes[0].set_title("Original", fontweight="bold")
-    axes[0].axis("off")
+    axes_array[0].imshow(original, cmap="gray")
+    axes_array[0].set_title("Original", fontweight="bold")
+    axes_array[0].axis("off")
 
     # Processed images
-    for ax, (name, img) in zip(axes[1:], processed.items()):
+    for ax, (name, img) in zip(axes_array[1:], processed.items()):
         ax.imshow(img, cmap="gray")
         ax.set_title(name, fontweight="bold")
         ax.axis("off")
 
-    plt.suptitle("Ultrasound Image Preprocessing Comparison", fontsize=14, fontweight="bold")
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.suptitle("Ultrasound Image Preprocessing Comparison", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig
 
@@ -110,10 +124,10 @@ def plot_preprocessing_comparison(
 def plot_segmentation_overlay(
     image: np.ndarray,
     mask_true: np.ndarray,
-    mask_pred: Optional[np.ndarray] = None,
+    mask_pred: np.ndarray | None = None,
     alpha: float = 0.4,
-    figsize: Tuple[int, int] = (15, 5),
-    save_path: Optional[str] = None,
+    figsize: tuple[int, int] = (15, 5),
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Visualize segmentation results with overlay.
@@ -150,14 +164,16 @@ def plot_segmentation_overlay(
     axes[0].axis("off")
 
     # Ground truth overlay
-    overlay_true = create_mask_overlay(image_rgb, mask_true, color=[0, 1, 0], alpha=alpha)
+    overlay_true = create_mask_overlay(image_rgb, mask_true, color=(0.0, 1.0, 0.0), alpha=alpha)
     axes[1].imshow(overlay_true)
     axes[1].set_title("Ground Truth")
     axes[1].axis("off")
 
     if mask_pred is not None:
         # Prediction overlay
-        overlay_pred = create_mask_overlay(image_rgb, mask_pred, color=[1, 0, 0], alpha=alpha)
+        overlay_pred = create_mask_overlay(
+            image_rgb, mask_pred, color=(1.0, 0.0, 0.0), alpha=alpha
+        )
         axes[2].imshow(overlay_pred)
         axes[2].set_title("Prediction")
         axes[2].axis("off")
@@ -168,10 +184,8 @@ def plot_segmentation_overlay(
         axes[3].set_title("Comparison\n(Green=TP, Red=FP, Blue=FN)")
         axes[3].axis("off")
 
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig
 
@@ -179,16 +193,24 @@ def plot_segmentation_overlay(
 def create_mask_overlay(
     image: np.ndarray,
     mask: np.ndarray,
-    color: List[float] = [1, 0, 0],
+    color: Sequence[float] = DEFAULT_OVERLAY_COLOR,
     alpha: float = 0.4,
 ) -> np.ndarray:
     """Create overlay of mask on image."""
+    if image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError("image must have shape (height, width, 3)")
+    if len(color) != 3:
+        raise ValueError("color must contain exactly three channels")
+
+    color_triplet = tuple(float(channel) for channel in color)
     overlay = image.copy()
     mask_bool = mask > 0.5
 
     for c in range(3):
         overlay[:, :, c] = np.where(
-            mask_bool, overlay[:, :, c] * (1 - alpha) + color[c] * alpha, overlay[:, :, c]
+            mask_bool,
+            overlay[:, :, c] * (1 - alpha) + color_triplet[c] * alpha,
+            overlay[:, :, c],
         )
 
     return np.clip(overlay, 0, 1)
@@ -211,9 +233,9 @@ def create_comparison_overlay(
     fn = true_bool & ~pred_bool  # False Negative - Blue
 
     colors = {
-        "tp": [0, 1, 0],  # Green
-        "fp": [1, 0, 0],  # Red
-        "fn": [0, 0, 1],  # Blue
+        "tp": (0.0, 1.0, 0.0),  # Green
+        "fp": (1.0, 0.0, 0.0),  # Red
+        "fn": (0.0, 0.0, 1.0),  # Blue
     }
 
     for mask_type, mask in [("tp", tp), ("fp", fp), ("fn", fn)]:
@@ -227,10 +249,10 @@ def create_comparison_overlay(
 
 
 def plot_training_history(
-    history: Dict[str, List[float]],
-    metrics: List[str] = ["loss", "accuracy"],
-    figsize: Tuple[int, int] = (12, 4),
-    save_path: Optional[str] = None,
+    history: Mapping[str, Sequence[float]],
+    metrics: Sequence[str] = DEFAULT_TRAINING_METRICS,
+    figsize: tuple[int, int] = (12, 4),
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Plot training history curves.
@@ -244,13 +266,14 @@ def plot_training_history(
     Returns:
         Matplotlib figure
     """
+    if not metrics:
+        raise ValueError("metrics must contain at least one metric name")
+
     n_metrics = len(metrics)
     fig, axes = plt.subplots(1, n_metrics, figsize=figsize)
+    axes_array = np.atleast_1d(axes)
 
-    if n_metrics == 1:
-        axes = [axes]
-
-    for ax, metric in zip(axes, metrics):
+    for ax, metric in zip(axes_array.flat, metrics):
         if metric in history:
             ax.plot(history[metric], label=f"Train {metric}", color="blue")
         if f"val_{metric}" in history:
@@ -262,10 +285,8 @@ def plot_training_history(
         ax.legend()
         ax.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig
 
@@ -273,9 +294,9 @@ def plot_training_history(
 def plot_roc_curve(
     y_true: np.ndarray,
     y_score: np.ndarray,
-    class_names: Optional[List[str]] = None,
-    figsize: Tuple[int, int] = (8, 6),
-    save_path: Optional[str] = None,
+    class_names: Sequence[str] | None = None,
+    figsize: tuple[int, int] = (8, 6),
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Plot ROC curve for classification.
@@ -326,21 +347,19 @@ def plot_roc_curve(
     ax.legend(loc="lower right")
     ax.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig
 
 
 def plot_confusion_matrix(
     cm: np.ndarray,
-    class_names: Optional[List[str]] = None,
+    class_names: Sequence[str] | None = None,
     normalize: bool = True,
-    figsize: Tuple[int, int] = (8, 6),
+    figsize: tuple[int, int] = (8, 6),
     cmap: str = "Blues",
-    save_path: Optional[str] = None,
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Plot confusion matrix heatmap.
@@ -396,10 +415,8 @@ def plot_confusion_matrix(
                 color="white" if cm[i, j] > thresh else "black",
             )
 
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig
 
@@ -407,8 +424,8 @@ def plot_confusion_matrix(
 def plot_speckle_analysis(
     image: np.ndarray,
     window_size: int = 32,
-    figsize: Tuple[int, int] = (15, 5),
-    save_path: Optional[str] = None,
+    figsize: tuple[int, int] = (15, 5),
+    save_path: FigurePath = None,
 ) -> plt.Figure:
     """
     Analyze and visualize speckle characteristics in ultrasound image.
@@ -455,18 +472,20 @@ def plot_speckle_analysis(
     std_val = np.std(image)
     cv_global = std_val / mean_val
 
-    stats_text = f"""
-    Speckle Statistics:
-    
-    Mean intensity: {mean_val:.2f}
-    Std deviation: {std_val:.2f}
-    Global CV: {cv_global:.3f}
-    
-    For fully developed speckle,
-    CV ≈ 1.0 (Rayleigh)
-    
-    Image CV: {cv_global:.3f}
-    """
+    stats_text = "\n".join(
+        [
+            "Speckle Statistics:",
+            "",
+            f"Mean intensity: {mean_val:.2f}",
+            f"Std deviation: {std_val:.2f}",
+            f"Global CV: {cv_global:.3f}",
+            "",
+            "For fully developed speckle,",
+            "CV ~= 1.0 (Rayleigh)",
+            "",
+            f"Image CV: {cv_global:.3f}",
+        ]
+    )
 
     axes[3].text(
         0.1,
@@ -481,10 +500,8 @@ def plot_speckle_analysis(
     axes[3].axis("off")
     axes[3].set_title("Speckle Analysis")
 
-    plt.suptitle("Ultrasound Speckle Analysis", fontsize=14, fontweight="bold")
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    fig.suptitle("Ultrasound Speckle Analysis", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    _save_figure(fig, save_path)
 
     return fig

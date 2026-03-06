@@ -24,6 +24,16 @@ class TestUNet:
         mask = model.predict(x)
         assert set(mask.unique().tolist()).issubset({0.0, 1.0})
 
+    def test_features_are_copied_from_input_sequence(self):
+        features = [16, 32, 64, 128]
+        model = UNet(in_channels=3, out_channels=1, features=features)
+        features[0] = 999
+        assert model.features == (16, 32, 64, 128)
+
+    def test_invalid_feature_length(self):
+        with pytest.raises(ValueError, match="exactly four"):
+            UNet(in_channels=3, out_channels=1, features=[16, 32, 64])
+
 
 class TestUNetSmall:
     def test_output_shape(self):
@@ -37,6 +47,10 @@ class TestAttentionUNet:
         model = AttentionUNet(in_channels=3, out_channels=1, features=[16, 32, 64, 128])
         x = torch.randn(1, 3, 64, 64)
         assert model(x).shape == (1, 1, 64, 64)
+
+    def test_invalid_feature_values(self):
+        with pytest.raises(ValueError, match="positive integers"):
+            AttentionUNet(in_channels=3, out_channels=1, features=[16, 32, 0, 128])
 
 
 class TestDiceLoss:

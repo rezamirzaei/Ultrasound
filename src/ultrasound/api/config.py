@@ -20,7 +20,7 @@ class AppConfig:
     database_url: str = ""
 
     @classmethod
-    def from_project_root(cls, start: Path | None = None) -> "AppConfig":
+    def from_project_root(cls, start: Path | None = None) -> AppConfig:
         """Resolve project root and construct default path configuration."""
         cursor = (start or Path.cwd()).resolve()
         for candidate in (cursor, *cursor.parents):

@@ -12,11 +12,26 @@ Reference:
     Networks for Biomedical Image Segmentation. MICCAI 2015.
 """
 
-from typing import List, Optional, cast
+from collections.abc import Sequence
+from typing import Optional, cast
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+FeatureSpec = tuple[int, int, int, int]
+DEFAULT_UNET_FEATURES: FeatureSpec = (64, 128, 256, 512)
+DEFAULT_SMALL_UNET_FEATURES: FeatureSpec = (32, 64, 128, 256)
+
+
+def _normalize_features(features: Sequence[int]) -> FeatureSpec:
+    """Validate and freeze encoder/decoder channel widths."""
+    normalized = tuple(int(feature) for feature in features)
+    if len(normalized) != 4:
+        raise ValueError("features must contain exactly four channel sizes")
+    if any(feature <= 0 for feature in normalized):
+        raise ValueError("features must contain only positive integers")
+    return cast(FeatureSpec, normalized)
 
 
 class ConvBlock(nn.Module):
@@ -118,35 +133,44 @@ class UNet(nn.Module):
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        features: List[int] = [64, 128, 256, 512],
+        features: Sequence[int] = DEFAULT_UNET_FEATURES,
         bilinear: bool = True,
         dropout: float = 0.0,
     ):
         super().__init__()
+        normalized_features = _normalize_features(features)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.features = features
+        self.features = normalized_features
         self.bilinear = bilinear
 
         # Input convolution
-        self.inc = ConvBlock(in_channels, features[0])
+        self.inc = ConvBlock(in_channels, normalized_features[0])
 
         # Encoder (downsampling)
-        self.down1 = DownBlock(features[0], features[1], dropout)
-        self.down2 = DownBlock(features[1], features[2], dropout)
-        self.down3 = DownBlock(features[2], features[3], dropout)
+        self.down1 = DownBlock(normalized_features[0], normalized_features[1], dropout)
+        self.down2 = DownBlock(normalized_features[1], normalized_features[2], dropout)
+        self.down3 = DownBlock(normalized_features[2], normalized_features[3], dropout)
 
         factor = 2 if bilinear else 1
-        self.down4 = DownBlock(features[3], features[3] * 2 // factor, dropout)
+        self.down4 = DownBlock(
+            normalized_features[3], normalized_features[3] * 2 // factor, dropout
+        )
 
         # Decoder (upsampling)
-        self.up1 = UpBlock(features[3] * 2, features[3] // factor, bilinear, dropout)
-        self.up2 = UpBlock(features[3], features[2] // factor, bilinear, dropout)
-        self.up3 = UpBlock(features[2], features[1] // factor, bilinear, dropout)
-        self.up4 = UpBlock(features[1], features[0], bilinear, dropout)
+        self.up1 = UpBlock(
+            normalized_features[3] * 2, normalized_features[3] // factor, bilinear, dropout
+        )
+        self.up2 = UpBlock(
+            normalized_features[3], normalized_features[2] // factor, bilinear, dropout
+        )
+        self.up3 = UpBlock(
+            normalized_features[2], normalized_features[1] // factor, bilinear, dropout
+        )
+        self.up4 = UpBlock(normalized_features[1], normalized_features[0], bilinear, dropout)
 
         # Output convolution
-        self.outc = nn.Conv2d(features[0], out_channels, kernel_size=1)
+        self.outc = nn.Conv2d(normalized_features[0], out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Encoder
@@ -185,16 +209,17 @@ class UNetSmall(nn.Module):
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        features: List[int] = [32, 64, 128, 256],
+        features: Sequence[int] = DEFAULT_SMALL_UNET_FEATURES,
         bilinear: bool = True,
         dropout: float = 0.1,
     ):
         super().__init__()
+        self.features = _normalize_features(features)
 
         self.model = UNet(
             in_channels=in_channels,
             out_channels=out_channels,
-            features=features,
+            features=self.features,
             bilinear=bilinear,
             dropout=dropout,
         )
@@ -269,36 +294,45 @@ class AttentionUNet(nn.Module):
         self,
         in_channels: int = 3,
         out_channels: int = 1,
-        features: List[int] = [64, 128, 256, 512],
+        features: Sequence[int] = DEFAULT_UNET_FEATURES,
         bilinear: bool = True,
         dropout: float = 0.0,
     ):
         super().__init__()
-        self.features = features
+        normalized_features = _normalize_features(features)
+        self.features = normalized_features
 
         # Encoder
-        self.inc = ConvBlock(in_channels, features[0])
-        self.down1 = DownBlock(features[0], features[1], dropout)
-        self.down2 = DownBlock(features[1], features[2], dropout)
-        self.down3 = DownBlock(features[2], features[3], dropout)
+        self.inc = ConvBlock(in_channels, normalized_features[0])
+        self.down1 = DownBlock(normalized_features[0], normalized_features[1], dropout)
+        self.down2 = DownBlock(normalized_features[1], normalized_features[2], dropout)
+        self.down3 = DownBlock(normalized_features[2], normalized_features[3], dropout)
 
         factor = 2 if bilinear else 1
-        self.down4 = DownBlock(features[3], features[3] * 2 // factor, dropout)
+        self.down4 = DownBlock(
+            normalized_features[3], normalized_features[3] * 2 // factor, dropout
+        )
 
         # Attention gates
-        self.att1 = AttentionGate(features[3] * 2 // factor, features[3])
-        self.att2 = AttentionGate(features[3] // factor, features[2])
-        self.att3 = AttentionGate(features[2] // factor, features[1])
-        self.att4 = AttentionGate(features[1] // factor, features[0])
+        self.att1 = AttentionGate(normalized_features[3] * 2 // factor, normalized_features[3])
+        self.att2 = AttentionGate(normalized_features[3] // factor, normalized_features[2])
+        self.att3 = AttentionGate(normalized_features[2] // factor, normalized_features[1])
+        self.att4 = AttentionGate(normalized_features[1] // factor, normalized_features[0])
 
         # Decoder
-        self.up1 = UpBlock(features[3] * 2, features[3] // factor, bilinear, dropout)
-        self.up2 = UpBlock(features[3], features[2] // factor, bilinear, dropout)
-        self.up3 = UpBlock(features[2], features[1] // factor, bilinear, dropout)
-        self.up4 = UpBlock(features[1], features[0], bilinear, dropout)
+        self.up1 = UpBlock(
+            normalized_features[3] * 2, normalized_features[3] // factor, bilinear, dropout
+        )
+        self.up2 = UpBlock(
+            normalized_features[3], normalized_features[2] // factor, bilinear, dropout
+        )
+        self.up3 = UpBlock(
+            normalized_features[2], normalized_features[1] // factor, bilinear, dropout
+        )
+        self.up4 = UpBlock(normalized_features[1], normalized_features[0], bilinear, dropout)
 
         # Output
-        self.outc = nn.Conv2d(features[0], out_channels, kernel_size=1)
+        self.outc = nn.Conv2d(normalized_features[0], out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Encoder
