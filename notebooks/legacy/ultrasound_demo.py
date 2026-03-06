@@ -55,8 +55,8 @@ from pathlib import Path
 project_root = Path('.').absolute().parent
 sys.path.insert(0, str(project_root / 'src'))
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Set visualization style
 try:
@@ -280,7 +280,11 @@ plt.show()
 # - **Gamma Correction:** Power-law intensity transformation
 
 # %%
-from ultrasound.preprocessing.enhancement import apply_clahe, histogram_equalization, gamma_correction
+from ultrasound.preprocessing.enhancement import (
+    apply_clahe,
+    gamma_correction,
+    histogram_equalization,
+)
 
 # Apply enhancement methods
 clahe_result = apply_clahe(gray, clip_limit=2.5)
@@ -345,6 +349,7 @@ plt.show()
 
 # %%
 import torch
+
 from ultrasound.models.unet import UNet
 
 # Create U-Net model
@@ -431,9 +436,9 @@ resnet_trainable = sum(p.numel() for p in resnet_model.parameters() if p.require
 
 print("Classification Model Comparison")
 print("=" * 50)
-print(f"\nCustom CNN:")
+print("\nCustom CNN:")
 print(f"  Parameters: {custom_params:,}")
-print(f"\nResNet-18 (Transfer Learning):")
+print("\nResNet-18 (Transfer Learning):")
 print(f"  Total:      {resnet_total:,}")
 print(f"  Trainable:  {resnet_trainable:,}")
 print(f"  Frozen:     {resnet_total - resnet_trainable:,}")
@@ -447,6 +452,7 @@ print(f"  Frozen:     {resnet_total - resnet_trainable:,}")
 # %%
 import torch.nn.functional as F
 
+
 def analyze_ultrasound(image):
     """
     Complete ultrasound analysis pipeline.
@@ -457,10 +463,10 @@ def analyze_ultrasound(image):
     3. Lesion segmentation (U-Net)
     4. Classification (ResNet)
     """
-    from ultrasound.preprocessing.speckle import SpeckleReducer
-    from ultrasound.preprocessing.enhancement import apply_clahe
-    from ultrasound.models.unet import UNet
     from ultrasound.models.classifier import ResNetClassifier
+    from ultrasound.models.unet import UNet
+    from ultrasound.preprocessing.enhancement import apply_clahe
+    from ultrasound.preprocessing.speckle import SpeckleReducer
 
     # Stage 1: Preprocessing
     gray = np.mean(image, axis=2).astype(np.uint8) if image.ndim == 3 else image

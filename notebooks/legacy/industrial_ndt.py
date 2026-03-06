@@ -59,15 +59,15 @@ data_path = project_root / 'data'
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
-from tqdm import tqdm
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader, random_split
 import torchvision.transforms as transforms
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset, random_split
+from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 print(f"✓ Using device: {device}")
@@ -510,6 +510,7 @@ if neu_dataset:
 # %%
 from ultrasound.models.classifier import ResNetClassifier
 
+
 def train_defect_classifier(dataset, num_classes, dataset_name, epochs=10, batch_size=16):
     """Train a classifier for industrial defect detection."""
 
@@ -646,7 +647,7 @@ def generate_synthetic_ascan():
 
 def analyze_ascan(t, signal):
     """Analyze A-scan signal for defect detection."""
-    from scipy.signal import hilbert, find_peaks
+    from scipy.signal import find_peaks, hilbert
 
     # Envelope detection using Hilbert transform
     analytic_signal = hilbert(signal)

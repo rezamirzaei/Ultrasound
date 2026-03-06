@@ -40,10 +40,6 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch import nn
-from torch.optim import Adam
-from torch.utils.data import DataLoader
-
 from _notebook_utils import (
     busi_class_counts,
     ensure_notebook_output_dir,
@@ -51,6 +47,9 @@ from _notebook_utils import (
     save_json_report,
     set_reproducible_seed,
 )
+from torch import nn
+from torch.optim import Adam
+from torch.utils.data import DataLoader
 
 project_root = ensure_src_on_path()
 seed = set_reproducible_seed(42)

@@ -72,13 +72,14 @@
 # **Why this matters:** Real-world data is noisy, band-limited, and subject to attenuation. Unlike synthetic data, it tests the robustness of our algorithms against physical realities.
 
 # %%
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import hilbert
-from scipy.optimize import minimize
-from scipy.fft import fft, ifft, fftfreq
-from pathlib import Path
 import warnings
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.fft import fft, fftfreq
+from scipy.signal import hilbert
+
 warnings.filterwarnings('ignore')
 
 # Add display() for notebook-friendly tables
@@ -140,7 +141,7 @@ fs = primary_data['fs']
 fc = primary_data['fc']
 t = primary_data['time']
 
-print(f"\n✓ Primary dataset: Weld Inspection")
+print("\n✓ Primary dataset: Weld Inspection")
 print(f"  Samples: {len(rf_signal)}")
 print(f"  Sampling frequency: {fs/1e6:.1f} MHz")
 print(f"  Center frequency: {fc/1e6:.1f} MHz")
@@ -163,7 +164,7 @@ analytic_signal = hilbert(rf_signal)
 envelope = np.abs(analytic_signal)
 phase_true = np.angle(analytic_signal)
 
-print(f"✓ Created analytic signal from real NDT data")
+print("✓ Created analytic signal from real NDT data")
 print(f"  Signal length: {len(analytic_signal)}")
 print(f"  Max envelope: {envelope.max():.4f}")
 
@@ -251,7 +252,7 @@ for i in range(m):
 y_A_amplitude = np.abs(A @ x_true)  # |Ax|
 y_A_intensity = np.abs(A @ x_true)**2  # |Ax|^2
 
-print(f"✓ Phase retrieval problem setup:")
+print("✓ Phase retrieval problem setup:")
 print(f"  Signal dimension n = {n}")
 print(f"  Measurements m = {m}")
 print(f"  Oversampling ratio = {m/n:.1f}x")

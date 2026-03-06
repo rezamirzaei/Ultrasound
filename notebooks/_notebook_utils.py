@@ -6,7 +6,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -105,7 +105,7 @@ def to_float_scalar(value: Any, default: float) -> float:
         return float(default)
 
 
-def load_ndt_sample(sample_name: str = "weld_inspection.npz") -> Dict[str, Any]:
+def load_ndt_sample(sample_name: str = "weld_inspection.npz") -> dict[str, Any]:
     """Load a local NDT A-scan sample from data/ascan_signals/ndt_samples."""
     root = resolve_project_root()
     sample_path = root / NDT_SAMPLE_DIR / sample_name

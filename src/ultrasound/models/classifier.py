@@ -9,7 +9,7 @@ Includes:
 - Transfer learning with pretrained ResNet
 """
 
-from typing import List, Optional, cast
+from typing import Optional, cast
 
 import torch
 import torch.nn as nn
@@ -255,7 +255,7 @@ class EnsembleClassifier(nn.Module):
 
     def __init__(
         self,
-        models: List[nn.Module],
+        models: list[nn.Module],
         strategy: str = "average",
     ):
         super().__init__()

@@ -25,7 +25,7 @@ References:
     Frost, V.S., et al. (1982). A model for radar images and its application to adaptive digital filtering.
 """
 
-from typing import Optional, Tuple, cast
+from typing import Optional, cast
 
 import cv2
 import numpy as np
@@ -109,7 +109,7 @@ class SpeckleReducer:
             return adaptive_median_filter(image, max_window_size=self.window_size)
         raise ValueError(f"Unsupported filtering method: {self.method}")
 
-    def estimate_speckle_level(self, image: np.ndarray) -> Tuple[float, float]:
+    def estimate_speckle_level(self, image: np.ndarray) -> tuple[float, float]:
         """
         Estimate speckle noise level in an ultrasound image.
 

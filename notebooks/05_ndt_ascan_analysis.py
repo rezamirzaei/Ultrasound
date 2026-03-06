@@ -42,8 +42,6 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.signal import find_peaks, hilbert
-
 from _notebook_utils import (
     ensure_notebook_output_dir,
     ensure_src_on_path,
@@ -52,6 +50,7 @@ from _notebook_utils import (
     set_reproducible_seed,
     summarize_ndt_samples,
 )
+from scipy.signal import find_peaks, hilbert
 
 project_root = ensure_src_on_path()
 seed = set_reproducible_seed(42)

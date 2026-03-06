@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from typing import Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 import numpy as np
 from scipy.signal import find_peaks, hilbert, peak_widths

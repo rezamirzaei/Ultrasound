@@ -48,10 +48,11 @@
 
 # %%
 from pathlib import Path
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy import signal
-from scipy.signal import hilbert, butter, filtfilt, find_peaks, spectrogram
+from scipy.signal import butter, filtfilt, find_peaks, hilbert, spectrogram
 
 # Configure paths
 project_root = Path('.').absolute().parent
@@ -123,7 +124,7 @@ if ndt_dir.exists():
             'fs': data['fs'],
             'c': data['c'],
             'source': data['description'],
-            'probe': f"5 MHz NDT Transducer (simulated)",
+            'probe': "5 MHz NDT Transducer (simulated)",
             'thickness': data['thickness']
         }
         print(f"✓ Loaded: {example_file.name}")

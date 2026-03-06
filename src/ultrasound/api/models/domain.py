@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Literal
+from typing import Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -93,7 +93,7 @@ class NdtSignalAnalysisRecord(BaseModel):
     thinning_flag: bool = False
 
     @model_validator(mode="after")
-    def validate_peak_vectors(self) -> "NdtSignalAnalysisRecord":
+    def validate_peak_vectors(self) -> NdtSignalAnalysisRecord:
         if len(self.peak_indices) != len(self.peak_times_us):
             raise ValueError("peak_indices and peak_times_us must have identical lengths")
         return self
@@ -134,7 +134,7 @@ class NdtSampleRecord(BaseModel):
         return parsed if parsed > 0 else None
 
     @model_validator(mode="after")
-    def ensure_array_length_match(self) -> "NdtSampleRecord":
+    def ensure_array_length_match(self) -> NdtSampleRecord:
         if self.rf.size != self.time.size:
             raise ValueError("rf and time arrays must have identical lengths")
         return self
@@ -211,7 +211,7 @@ class BusiTrainingRunRecord(BaseModel):
     learning_rate: float = Field(gt=0.0, le=1.0)
     train_samples: int = Field(ge=1)
     test_samples: int = Field(ge=1)
-    class_counts: Dict[str, int]
+    class_counts: dict[str, int]
     class_labels: list[str]
     train_accuracy: float = Field(ge=0.0, le=1.0)
     test_accuracy: float = Field(ge=0.0, le=1.0)
@@ -264,7 +264,7 @@ class IndustrialTrainingRunRecord(BaseModel):
     learning_rate: float = Field(gt=0.0, le=1.0)
     train_samples: int = Field(ge=1)
     test_samples: int = Field(ge=1)
-    class_counts: Dict[str, int]
+    class_counts: dict[str, int]
     class_labels: list[str]
     task_type: Literal[
         "classification_single_label",

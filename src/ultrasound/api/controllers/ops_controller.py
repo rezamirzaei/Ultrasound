@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import column, func, inspect, select, table
-
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import column, func, inspect, select, table
+
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
 from ultrasound.api.database.session import Base

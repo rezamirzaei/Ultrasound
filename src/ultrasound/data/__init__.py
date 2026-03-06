@@ -7,7 +7,7 @@ Supported Datasets:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import torch
@@ -63,7 +63,7 @@ class BUSIDataset(Dataset):
 
         self.samples = self._load_samples()
 
-    def _load_samples(self) -> List[Dict]:
+    def _load_samples(self) -> list[dict]:
         """Load and organize dataset samples."""
         samples = []
 
@@ -114,7 +114,7 @@ class BUSIDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, int]:
         sample = self.samples[idx]
 
         # Load image
@@ -211,7 +211,7 @@ def download_busi_dataset(download_dir: str) -> str:
     print("=" * 60)
     print("BUSI Dataset Download Instructions")
     print("=" * 60)
-    print("""
+    print(f"""
 To download the Breast Ultrasound Images Dataset:
 
 Option 1: Using Kaggle CLI
@@ -231,7 +231,7 @@ The dataset contains:
 - 780 ultrasound images (PNG format)
 - 3 classes: benign (437), malignant (210), normal (133)
 - Ground truth segmentation masks
-""".format(download_dir=download_dir))
+""")
 
     return str(dataset_path)
 
@@ -270,7 +270,7 @@ def create_sample_data(output_dir: str, num_samples: int = 10) -> str:
 
 
 def _generate_synthetic_ultrasound(
-    class_name: str, size: Tuple[int, int] = (256, 256)
+    class_name: str, size: tuple[int, int] = (256, 256)
 ) -> np.ndarray:
     """Generate a synthetic ultrasound-like image with speckle noise."""
     image, _ = _generate_synthetic_ultrasound_with_mask(class_name, size=size)
@@ -279,9 +279,9 @@ def _generate_synthetic_ultrasound(
 
 def _generate_synthetic_ultrasound_with_mask(
     class_name: str,
-    size: Tuple[int, int] = (256, 256),
+    size: tuple[int, int] = (256, 256),
     rng: Optional[np.random.Generator] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate a synthetic ultrasound-like image and its aligned lesion mask."""
     if rng is None:
         rng = np.random.default_rng()
@@ -329,7 +329,7 @@ def _generate_synthetic_ultrasound_with_mask(
     return img_rgb, mask
 
 
-def _generate_synthetic_mask(size: Tuple[int, int]) -> np.ndarray:
+def _generate_synthetic_mask(size: tuple[int, int]) -> np.ndarray:
     """Generate a simple circular mask."""
     mask = np.zeros(size, dtype=np.uint8)
     center_y, center_x = size[0] // 2, size[1] // 2

@@ -55,15 +55,15 @@ data_path = project_root / 'data' / 'busi'
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
-from tqdm import tqdm
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader, random_split
 import torchvision.transforms as transforms
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset, random_split
+from tqdm import tqdm
 
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
@@ -91,7 +91,6 @@ except:
 def download_busi_dataset():
     """Download BUSI dataset from Kaggle."""
     import shutil
-    import zipfile
 
     data_path.mkdir(parents=True, exist_ok=True)
 
@@ -194,7 +193,7 @@ def show_sample_images():
         if mask_paths:
             mask = np.array(Image.open(mask_paths[0]))
             axes[1, i].imshow(mask, cmap='gray')
-            axes[1, i].set_title(f'Segmentation Mask', fontsize=10)
+            axes[1, i].set_title('Segmentation Mask', fontsize=10)
         else:
             axes[1, i].text(0.5, 0.5, 'No mask', ha='center', va='center')
         axes[1, i].axis('off')
@@ -328,6 +327,7 @@ cls_dataset = BUSIClassificationDataset(data_path)
 # %%
 from ultrasound.models.unet import UNet
 
+
 def dice_loss(pred, target, smooth=1e-6):
     """Dice loss for segmentation."""
     pred = torch.sigmoid(pred)
@@ -355,7 +355,7 @@ def train_segmentation_model(dataset, epochs=20, batch_size=8, lr=1e-4):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    print(f"\nTraining Segmentation Model")
+    print("\nTraining Segmentation Model")
     print(f"{'='*50}")
     print(f"Train samples: {len(train_dataset)}")
     print(f"Val samples:   {len(val_dataset)}")
@@ -460,6 +460,7 @@ plt.show()
 # %%
 from ultrasound.models.classifier import ResNetClassifier
 
+
 def train_classification_model(dataset, epochs=20, batch_size=16, lr=1e-4):
     """Train ResNet for benign vs malignant classification."""
 
@@ -471,7 +472,7 @@ def train_classification_model(dataset, epochs=20, batch_size=16, lr=1e-4):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    print(f"\nTraining Classification Model")
+    print("\nTraining Classification Model")
     print(f"{'='*50}")
     print(f"Train samples: {len(train_dataset)}")
     print(f"Val samples:   {len(val_dataset)}")
@@ -604,7 +605,7 @@ def evaluate_segmentation(model, dataset, num_samples=6):
         axes[i, 1].axis('off')
 
         axes[i, 2].imshow(pred, cmap='jet')
-        axes[i, 2].set_title(f"Prediction")
+        axes[i, 2].set_title("Prediction")
         axes[i, 2].axis('off')
 
     plt.suptitle("Segmentation Results on BUSI Dataset", fontsize=14, fontweight='bold')
@@ -615,8 +616,9 @@ def evaluate_segmentation(model, dataset, num_samples=6):
 evaluate_segmentation(seg_model, seg_dataset)
 
 # %%
-from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
+from sklearn.metrics import classification_report, confusion_matrix
+
 
 def evaluate_classification(model, dataset):
     """Evaluate classification with confusion matrix."""

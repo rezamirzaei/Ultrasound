@@ -8,15 +8,15 @@ from ultrasound.api.repositories.auth_repository import AuthRepository
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
 from ultrasound.api.repositories.job_repository import JobRepository
 from ultrasound.api.services.auth_service import AuthService
-from ultrasound.api.services.busi_yolo_lab_service import BusiYoloLabService
 from ultrasound.api.services.busi_training_service import BusiTrainingService
+from ultrasound.api.services.busi_yolo_lab_service import BusiYoloLabService
 from ultrasound.api.services.dashboard_service import DashboardService
 from ultrasound.api.services.data_ingestion_service import DataIngestionService
 from ultrasound.api.services.dataset_upload_service import DatasetUploadService
 from ultrasound.api.services.error_analytics_service import ErrorAnalyticsService
 from ultrasound.api.services.industrial_training_service import IndustrialTrainingService
-from ultrasound.api.services.liver_yolo_lab_service import LiverYoloLabService
 from ultrasound.api.services.job_queue_service import JobQueueService
+from ultrasound.api.services.liver_yolo_lab_service import LiverYoloLabService
 from ultrasound.api.services.media_service import MediaService
 from ultrasound.api.services.ndt_detection_service import NdtDetectionService
 from ultrasound.api.services.observability_service import ObservabilityService

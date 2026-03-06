@@ -34,9 +34,6 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.sparse import diags, eye
-from scipy.sparse.linalg import spsolve
-
 from _notebook_utils import (
     ensure_notebook_output_dir,
     ensure_src_on_path,
@@ -44,6 +41,8 @@ from _notebook_utils import (
     save_json_report,
     set_reproducible_seed,
 )
+from scipy.sparse import diags, eye
+from scipy.sparse.linalg import spsolve
 
 project_root = ensure_src_on_path()
 seed = set_reproducible_seed(42)

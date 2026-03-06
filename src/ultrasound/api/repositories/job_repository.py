@@ -104,10 +104,13 @@ class JobRepository:
             if row is None:
                 raise ValueError(f"Job {job_id} not found")
 
+            now = datetime.now(tz=timezone.utc)
             row.status = "completed"
             row.result_json = json.dumps(result, sort_keys=True)
             row.error_message = None
-            row.finished_at = datetime.now(tz=timezone.utc)
+            if row.started_at is None:
+                row.started_at = now
+            row.finished_at = now
             session.flush()
             return self._to_record(row)
 
@@ -117,9 +120,13 @@ class JobRepository:
             if row is None:
                 raise ValueError(f"Job {job_id} not found")
 
+            now = datetime.now(tz=timezone.utc)
             row.status = "failed"
+            row.result_json = None
             row.error_message = error_message[:4000]
-            row.finished_at = datetime.now(tz=timezone.utc)
+            if row.started_at is None:
+                row.started_at = now
+            row.finished_at = now
             session.flush()
             return self._to_record(row)
 

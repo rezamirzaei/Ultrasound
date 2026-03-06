@@ -18,11 +18,11 @@ References:
     learning via the alternating direction method of multipliers.
 """
 
-from typing import Tuple, cast
+from typing import cast
 
 import cv2
 import numpy as np
-from scipy.sparse import csr_matrix, diags, eye, kron, lil_matrix, vstack
+from scipy.sparse import csr_matrix, eye, kron, lil_matrix, vstack
 from scipy.sparse.linalg import cg
 
 
@@ -101,7 +101,7 @@ def admm_tv_denoising(
     abstol: float = 1e-4,
     reltol: float = 1e-3,
     verbose: bool = False,
-) -> Tuple[np.ndarray, dict]:
+) -> tuple[np.ndarray, dict]:
     """
     Total Variation denoising using ADMM (Alternating Direction Method of Multipliers).
 
@@ -271,7 +271,7 @@ def soft_threshold(x: np.ndarray, threshold: float) -> np.ndarray:
     return cast(np.ndarray, np.sign(x) * np.maximum(np.abs(x) - threshold, 0))
 
 
-def _build_difference_operators(m: int, n: int) -> Tuple[csr_matrix, csr_matrix]:
+def _build_difference_operators(m: int, n: int) -> tuple[csr_matrix, csr_matrix]:
     """
     Build sparse finite difference operators for a 2-D image.
 

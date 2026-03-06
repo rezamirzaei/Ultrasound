@@ -8,8 +8,8 @@ optimization, segmentation, classification, and end-to-end pipeline usage.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import matplotlib
 import numpy as np

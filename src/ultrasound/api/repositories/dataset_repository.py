@@ -251,25 +251,23 @@ class DatasetRepository:
         for class_name in self.CLASSES:
             class_dir = self.config.busi_dir / class_name
             if not class_dir.exists():
-                digest.update(f"{class_name}:missing|".encode("utf-8"))
+                digest.update(f"{class_name}:missing|".encode())
                 continue
 
             image_paths = sorted(
                 path for path in class_dir.glob("*.png") if "_mask" not in path.stem
             )
-            digest.update(f"{class_name}:{len(image_paths)}|".encode("utf-8"))
+            digest.update(f"{class_name}:{len(image_paths)}|".encode())
             for image_path in image_paths:
                 stat = image_path.stat()
                 digest.update(
-                    f"{image_path.name}:{stat.st_size}:{stat.st_mtime_ns}|".encode("utf-8")
+                    f"{image_path.name}:{stat.st_size}:{stat.st_mtime_ns}|".encode()
                 )
                 mask_candidates = sorted(class_dir.glob(f"{image_path.stem}_mask*.png"))
                 if mask_candidates:
                     mask_stat = mask_candidates[0].stat()
                     digest.update(
-                        f"{mask_candidates[0].name}:{mask_stat.st_size}:{mask_stat.st_mtime_ns}|".encode(
-                            "utf-8"
-                        )
+                        f"{mask_candidates[0].name}:{mask_stat.st_size}:{mask_stat.st_mtime_ns}|".encode()
                     )
         return digest.hexdigest()
 
@@ -280,30 +278,28 @@ class DatasetRepository:
             return digest.hexdigest()
 
         sample_paths = sorted(self.config.ndt_dir.glob("*.npz"))
-        digest.update(f"ndt:{len(sample_paths)}|".encode("utf-8"))
+        digest.update(f"ndt:{len(sample_paths)}|".encode())
         for sample_path in sample_paths:
             stat = sample_path.stat()
-            digest.update(f"{sample_path.name}:{stat.st_size}:{stat.st_mtime_ns}|".encode("utf-8"))
+            digest.update(f"{sample_path.name}:{stat.st_size}:{stat.st_mtime_ns}|".encode())
         return digest.hexdigest()
 
     def _compute_industrial_fingerprint(self) -> str:
         digest = hashlib.sha256()
         sources = self._collect_industrial_sources()
-        digest.update(f"industrial:{len(sources)}|".encode("utf-8"))
+        digest.update(f"industrial:{len(sources)}|".encode())
         for dataset_name, split, class_name, image_path, annotation_path in sources:
             image_stat = image_path.stat()
             digest.update(
                 (
                     f"{dataset_name}:{split}:{class_name}:{image_path.name}:"
                     f"{image_stat.st_size}:{image_stat.st_mtime_ns}|"
-                ).encode("utf-8")
+                ).encode()
             )
             if annotation_path is not None:
                 ann_stat = annotation_path.stat()
                 digest.update(
-                    (f"{annotation_path.name}:{ann_stat.st_size}:{ann_stat.st_mtime_ns}|").encode(
-                        "utf-8"
-                    )
+                    (f"{annotation_path.name}:{ann_stat.st_size}:{ann_stat.st_mtime_ns}|").encode()
                 )
         return digest.hexdigest()
 

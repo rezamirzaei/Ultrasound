@@ -16,7 +16,7 @@ References:
     Pizer, S.M., et al. (1987). Adaptive histogram equalization and its variations.
 """
 
-from typing import Optional, Tuple, cast
+from typing import cast
 
 import cv2
 import numpy as np
@@ -40,7 +40,7 @@ class ContrastEnhancer:
         self,
         method: str = "clahe",
         clip_limit: float = 2.0,
-        tile_grid_size: Tuple[int, int] = (8, 8),
+        tile_grid_size: tuple[int, int] = (8, 8),
         gamma: float = 1.0,
     ):
         """
@@ -114,7 +114,7 @@ class ContrastEnhancer:
 def apply_clahe(
     image: np.ndarray,
     clip_limit: float = 2.0,
-    tile_grid_size: Tuple[int, int] = (8, 8),
+    tile_grid_size: tuple[int, int] = (8, 8),
 ) -> np.ndarray:
     """
     Apply Contrast Limited Adaptive Histogram Equalization (CLAHE).

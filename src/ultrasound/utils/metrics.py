@@ -11,9 +11,8 @@ from typing import Optional, cast
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score
 from sklearn.metrics import confusion_matrix as sklearn_confusion_matrix
-from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
 
 
 def compute_dice(

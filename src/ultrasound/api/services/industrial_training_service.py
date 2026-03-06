@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
-from typing import Iterable, Literal, cast
+from typing import Literal, cast
 from xml.etree import ElementTree
 
 import numpy as np

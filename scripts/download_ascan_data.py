@@ -8,13 +8,10 @@ Public Ultrasound Datasets:
 3. OpenBUFF - Open B-mode Ultrasound Freehand Framework
 """
 
-import os
-import urllib.request
 import zipfile
 from pathlib import Path
 
 import numpy as np
-
 import requests
 
 

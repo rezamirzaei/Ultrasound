@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from _notebook_utils import (
     ensure_notebook_output_dir,
     ensure_src_on_path,

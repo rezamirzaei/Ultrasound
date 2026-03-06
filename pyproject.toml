@@ -77,6 +77,14 @@ target-version = "py39"
 select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"alembic/env.py" = ["E402"]
+"scripts/*.py" = ["E402"]
+"notebooks/*.ipynb" = ["E402", "E722", "E741"]
+"notebooks/*.py" = ["E402", "E722", "E741"]
+"notebooks/legacy/*.ipynb" = ["E402", "E722", "E741"]
+"notebooks/legacy/*.py" = ["E402", "E722", "E741"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = false

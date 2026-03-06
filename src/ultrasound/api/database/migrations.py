@@ -24,6 +24,20 @@ def _alembic_config(database_url: str | None = None):
     return cfg
 
 
+def _legacy_stamp_revision(config: object) -> str:
+    """Best-effort baseline revision for legacy pre-Alembic databases."""
+    try:
+        from alembic.script import ScriptDirectory
+
+        script = ScriptDirectory.from_config(config)
+        bases = tuple(script.get_bases())
+        if bases:
+            return str(bases[0])
+    except Exception:
+        logger.exception("Could not resolve baseline Alembic revision for legacy auto-stamp.")
+    return "head"
+
+
 def upgrade_to_head(database_url: str | None = None, auto_stamp_legacy: bool = True) -> None:
     """Upgrade schema to latest revision; optionally stamp legacy pre-Alembic DBs."""
     try:
@@ -43,10 +57,15 @@ def upgrade_to_head(database_url: str | None = None, auto_stamp_legacy: bool = T
         message = str(exc).lower()
         is_legacy_conflict = "already exists" in message and "table" in message
         if auto_stamp_legacy and is_legacy_conflict:
+            legacy_revision = _legacy_stamp_revision(config)
             logger.warning(
-                "Detected pre-Alembic schema, stamping current DB to head revision. " "error=%s",
+                "Detected pre-Alembic schema, stamping DB to revision %s before upgrading to head. "
+                "error=%s",
+                legacy_revision,
                 exc,
             )
-            command.stamp(config, "head")
+            command.stamp(config, legacy_revision)
+            if legacy_revision != "head":
+                command.upgrade(config, "head")
             return
         raise

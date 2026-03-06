@@ -9,7 +9,11 @@ import numpy as np
 
 from ultrasound.api.config import AppConfig
 from ultrasound.api.models.domain import BusiSampleRecord
-from ultrasound.api.models.schemas import YoloPredictRequest, YoloPredictResponse, YoloStatusResponse
+from ultrasound.api.models.schemas import (
+    YoloPredictRequest,
+    YoloPredictResponse,
+    YoloStatusResponse,
+)
 from ultrasound.api.services.busi_yolo_lab_service import BusiYoloLabService
 from ultrasound.api.services.liver_yolo_lab_service import LiverYoloLabService
 from ultrasound.api.services.media_service import MediaService

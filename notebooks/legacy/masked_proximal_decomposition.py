@@ -63,18 +63,18 @@
 # ## 1. Environment Setup
 
 # %%
-import numpy as np
+import warnings
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.signal import hilbert
-from scipy.fft import fft, ifft, fftfreq
-from scipy.ndimage import uniform_filter1d
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
-from pathlib import Path
-import warnings
+
 warnings.filterwarnings('ignore')
 
-from IPython.display import display, Image
+from IPython.display import Image, display
 
 # --- Helper functions for physically meaningful decision-making ---
 
@@ -820,7 +820,7 @@ plt.show()
 # Imputation quality metrics
 observed_idx = np.where(mask == 1)[0]
 reconstruction_error = np.sqrt(np.mean((y[observed_idx] - y_imputed[observed_idx])**2))
-print(f"\n✓ Imputation complete")
+print("\n✓ Imputation complete")
 print(f"  Reconstruction RMSE on observed data: {reconstruction_error:.6f}")
 print(f"  Number of imputed samples: {len(missing_idx)}")
 
@@ -1002,7 +1002,8 @@ plt.savefig(output_path / 'masked_proximal_decision_scores.png', dpi=150)
 plt.show()
 
 # Display dashboards inline
-from IPython.display import Image, display
+from IPython.display import display
+
 print("\nDashboards (ROI-based)")
 print("=" * 60)
 for name in df_summary['Dataset']:
@@ -1203,7 +1204,8 @@ plt.close()
 
 # Re-embed from disk to ensure the exported HTML/PDF includes the figure reliably
 if fig_path.exists() and fig_path.stat().st_size > 0:
-    from IPython.display import Image as _Image, display as _display
+    from IPython.display import Image as _Image
+    from IPython.display import display as _display
     _display(_Image(filename=str(fig_path)))
 
 # %% [markdown]

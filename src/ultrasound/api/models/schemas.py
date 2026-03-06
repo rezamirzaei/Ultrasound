@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,21 +15,21 @@ class HealthResponse(BaseModel):
 
 
 class DashboardSummaryResponse(BaseModel):
-    busi_counts: Dict[str, int]
+    busi_counts: dict[str, int]
     busi_total: int
     ndt_samples: int
     industrial_total: int = Field(default=0, ge=0)
-    industrial_datasets: Dict[str, int] = Field(default_factory=dict)
+    industrial_datasets: dict[str, int] = Field(default_factory=dict)
     generated_at: datetime
 
 
 class DataReadinessResponse(BaseModel):
     status: str = Field(pattern="^(ok|warning)$")
-    busi_available_classes: List[str]
-    busi_missing_classes: List[str]
+    busi_available_classes: list[str]
+    busi_missing_classes: list[str]
     ndt_samples: int
-    industrial_datasets: Dict[str, int] = Field(default_factory=dict)
-    issues: List[str]
+    industrial_datasets: dict[str, int] = Field(default_factory=dict)
+    issues: list[str]
     generated_at: datetime
 
 
@@ -52,7 +52,7 @@ class NdtDefect(BaseModel):
 
 class NdtSampleDetail(NdtSampleSummary):
     description: str
-    defects: List[NdtDefect]
+    defects: list[NdtDefect]
 
 
 class NdtSignalStats(BaseModel):
@@ -84,11 +84,11 @@ class NdtSignalPreview(BaseModel):
     sample_name: str
     n_original_points: int = Field(gt=0)
     n_sampled_points: int = Field(gt=0)
-    time_us: List[float]
-    rf: List[float]
+    time_us: list[float]
+    rf: list[float]
     stats: NdtSignalStats
     total_peaks: int = Field(ge=0)
-    wall_markers: List[NdtWallMarker] = Field(default_factory=list)
+    wall_markers: list[NdtWallMarker] = Field(default_factory=list)
     estimated_thickness_mm: float | None = Field(default=None, ge=0)
     thickness_std_mm: float | None = Field(default=None, ge=0)
     thickness_ci95_lower_mm: float | None = Field(default=None, ge=0)
@@ -100,7 +100,7 @@ class NdtSignalPreview(BaseModel):
     nominal_thickness_mm: float | None = Field(default=None, ge=0)
     thickness_error_mm: float | None = None
     thinning_flag: bool = False
-    defect_markers: List[NdtDefectMarker]
+    defect_markers: list[NdtDefectMarker]
 
 
 class BusiSamplePreview(BaseModel):
@@ -108,7 +108,7 @@ class BusiSamplePreview(BaseModel):
     requested_index: int = Field(ge=0)
     resolved_index: int = Field(ge=0)
     total_samples: int = Field(gt=0)
-    image_shape: List[int]
+    image_shape: list[int]
     lesion_pixels: int = Field(ge=0)
     lesion_ratio: float = Field(ge=0.0, le=1.0)
     image_data_url: str
@@ -140,13 +140,13 @@ class BusiTrainingResponse(BaseModel):
     learning_rate: float = Field(ge=0.0)
     train_samples: int = Field(ge=0)
     test_samples: int = Field(ge=0)
-    class_counts: Dict[str, int]
-    class_labels: List[str]
+    class_counts: dict[str, int]
+    class_labels: list[str]
     train_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
     test_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
     train_loss: float | None = Field(default=None, ge=0.0)
     test_loss: float | None = Field(default=None, ge=0.0)
-    curve: List[BusiTrainingCurvePoint] = Field(default_factory=list)
+    curve: list[BusiTrainingCurvePoint] = Field(default_factory=list)
     notes: str | None = None
 
 
@@ -175,8 +175,8 @@ class IndustrialTrainingResponse(BaseModel):
     learning_rate: float = Field(ge=0.0)
     train_samples: int = Field(ge=0)
     test_samples: int = Field(ge=0)
-    class_counts: Dict[str, int]
-    class_labels: List[str]
+    class_counts: dict[str, int]
+    class_labels: list[str]
     task_type: Literal[
         "classification_single_label",
         "classification_single_label_with_bbox",
@@ -189,7 +189,7 @@ class IndustrialTrainingResponse(BaseModel):
     test_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
     train_loss: float | None = Field(default=None, ge=0.0)
     test_loss: float | None = Field(default=None, ge=0.0)
-    curve: List[IndustrialTrainingCurvePoint] = Field(default_factory=list)
+    curve: list[IndustrialTrainingCurvePoint] = Field(default_factory=list)
     annotated_samples: int = Field(default=0, ge=0)
     segmentation_iou_train: float | None = Field(default=None, ge=0.0, le=1.0)
     segmentation_iou_test: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -207,8 +207,8 @@ class JobEnqueueResponse(BaseModel):
 
 
 class JobRunResponse(JobEnqueueResponse):
-    payload: Dict[str, Any] = Field(default_factory=dict)
-    result: Dict[str, Any] | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    result: dict[str, Any] | None = None
     error_message: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -247,8 +247,8 @@ class IndustrialDatasetRow(BaseModel):
 class IndustrialDatasetSummaryResponse(BaseModel):
     generated_at: datetime
     total_samples: int = Field(ge=0)
-    totals_by_dataset: Dict[str, int] = Field(default_factory=dict)
-    rows: List[IndustrialDatasetRow] = Field(default_factory=list)
+    totals_by_dataset: dict[str, int] = Field(default_factory=dict)
+    rows: list[IndustrialDatasetRow] = Field(default_factory=list)
 
 
 class IndustrialSamplePreview(BaseModel):
@@ -258,7 +258,7 @@ class IndustrialSamplePreview(BaseModel):
     requested_index: int = Field(ge=0)
     resolved_index: int = Field(ge=0)
     total_samples: int = Field(gt=0)
-    image_shape: List[int]
+    image_shape: list[int]
     has_annotation: bool = False
     image_data_url: str
     relative_path: str
@@ -271,7 +271,7 @@ class IndustrialSegmentationPreview(BaseModel):
     requested_index: int = Field(ge=0)
     resolved_index: int = Field(ge=0)
     total_samples: int = Field(gt=0)
-    image_shape: List[int]
+    image_shape: list[int]
     bbox_count: int = Field(default=0, ge=0)
     annotation_coverage_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
     task_type: Literal[
@@ -309,9 +309,9 @@ class MethodPreview(BaseModel):
 
 
 class PreprocessingPreviewResponse(BaseModel):
-    image_shape: List[int]
+    image_shape: list[int]
     original_image_data_url: str
-    methods: List[MethodPreview]
+    methods: list[MethodPreview]
     recommendation: str
     generated_at: datetime
 
@@ -363,8 +363,8 @@ class OpsErrorSummaryResponse(BaseModel):
     window_minutes: int = Field(ge=1)
     total_error_count: int = Field(ge=0)
     recent_error_count: int = Field(ge=0)
-    by_status: Dict[str, int]
-    by_path: Dict[str, int]
+    by_status: dict[str, int]
+    by_path: dict[str, int]
     last_error_at: datetime | None = None
 
 
@@ -385,13 +385,13 @@ class DatabaseSchemaStatusResponse(BaseModel):
     database_url: str
     alembic_current_revision: str | None = None
     alembic_head_revision: str | None = None
-    tables: List[DatabaseTableStatus] = Field(default_factory=list)
+    tables: list[DatabaseTableStatus] = Field(default_factory=list)
 
 
 class YoloStatusResponse(BaseModel):
     available: bool
     backend: str
-    default_models: List[str] = Field(default_factory=list)
+    default_models: list[str] = Field(default_factory=list)
 
 
 class BusiYoloModelStatus(BaseModel):
@@ -410,7 +410,7 @@ class BusiYoloLabStatusResponse(BaseModel):
     generated_at: datetime
     yolo: YoloStatusResponse
     model: BusiYoloModelStatus
-    yolo_class_names: List[str] = Field(default_factory=list)
+    yolo_class_names: list[str] = Field(default_factory=list)
 
 
 class YoloLabel(BaseModel):
@@ -443,8 +443,8 @@ class BusiYoloSampleResponse(BaseModel):
     """BUSI sample preview augmented with derived YOLO labels from the segmentation mask."""
 
     sample: BusiSamplePreview
-    yolo_class_names: List[str] = Field(default_factory=list)
-    yolo_labels: List[YoloLabel] = Field(default_factory=list)
+    yolo_class_names: list[str] = Field(default_factory=list)
+    yolo_labels: list[YoloLabel] = Field(default_factory=list)
     raw_yolo_labels: str | None = None
     bbox_xyxy: YoloXyxyBox | None = None
 
@@ -459,8 +459,8 @@ class YoloDetection(BaseModel):
 class YoloPredictResponse(BaseModel):
     generated_at: datetime
     model: str
-    image_shape: List[int]
-    detections: List[YoloDetection] = Field(default_factory=list)
+    image_shape: list[int]
+    detections: list[YoloDetection] = Field(default_factory=list)
     annotated_image_data_url: str
     backend: str
     notes: str | None = None
@@ -474,7 +474,7 @@ class LiverDatasetStatusResponse(BaseModel):
     """Status of the liver ultrasound detection dataset on disk."""
 
     ready: bool
-    summary: Dict[str, Any]
+    summary: dict[str, Any]
     generated_at: datetime
 
 
@@ -484,7 +484,7 @@ class LiverYoloLabStatusResponse(BaseModel):
     generated_at: datetime
     yolo: YoloStatusResponse
     dataset: LiverDatasetStatusResponse
-    class_names: List[str] = Field(default_factory=list)
+    class_names: list[str] = Field(default_factory=list)
     trained_weights: str | None = None
     default_model: str = "yolo11n.pt"
 
@@ -507,9 +507,9 @@ class LiverSampleResponse(BaseModel):
     sample_index: int = Field(ge=0)
     total_samples: int = Field(ge=0)
     image_id: str
-    image_shape: List[int]
-    bboxes: List[LiverSampleBbox] = Field(default_factory=list)
-    class_names: List[str] = Field(default_factory=list)
+    image_shape: list[int]
+    bboxes: list[LiverSampleBbox] = Field(default_factory=list)
+    class_names: list[str] = Field(default_factory=list)
     image_data_url: str
 
 
@@ -539,7 +539,7 @@ class YoloTrainResponse(BaseModel):
     best_weights: str | None = None
     last_weights: str | None = None
     epochs_completed: int = 0
-    metrics: Dict[str, float] = Field(default_factory=dict)
+    metrics: dict[str, float] = Field(default_factory=dict)
     run_dir: str | None = None
 
 

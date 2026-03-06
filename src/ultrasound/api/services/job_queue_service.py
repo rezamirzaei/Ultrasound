@@ -63,6 +63,10 @@ class JobQueueService:
             self._stop_event.set()
             if thread is not None and thread.is_alive():
                 thread.join(timeout=max(0.1, float(timeout_seconds)))
+                if thread.is_alive():
+                    logger.warning("job worker did not stop within timeout")
+                    self.observability_service.set_worker_up(True)
+                    return
             self._worker_thread = None
             self.observability_service.set_worker_up(False)
 
@@ -101,15 +105,23 @@ class JobQueueService:
 
     def _run_loop(self) -> None:
         logger.info("job worker started")
-        while not self._stop_event.is_set():
-            job = self.repository.claim_next_pending()
-            if job is None:
-                self._stop_event.wait(self.poll_interval_seconds)
-                continue
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    job = self.repository.claim_next_pending()
+                except Exception as exc:
+                    logger.exception("job worker polling failed error=%s", exc)
+                    self._stop_event.wait(self.poll_interval_seconds)
+                    continue
 
-            self._execute_job(job)
+                if job is None:
+                    self._stop_event.wait(self.poll_interval_seconds)
+                    continue
 
-        logger.info("job worker stopped")
+                self._execute_job(job)
+        finally:
+            self.observability_service.set_worker_up(False)
+            logger.info("job worker stopped")
 
     def _execute_job(self, job: JobRunRecord) -> None:
         started = time.perf_counter()
@@ -157,7 +169,10 @@ class JobQueueService:
                 duration * 1e3,
             )
         except Exception as exc:
-            self.repository.mark_failed(job.id, str(exc))
+            try:
+                self.repository.mark_failed(job.id, str(exc))
+            except Exception as mark_exc:
+                logger.exception("job failure persistence failed id=%s error=%s", job.id, mark_exc)
             duration = time.perf_counter() - started
             job_type = cast(str, job.job_type)
             self.observability_service.observe_job(job_type, "failed", duration)
