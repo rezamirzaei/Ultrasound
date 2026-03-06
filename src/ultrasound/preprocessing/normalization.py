@@ -7,15 +7,37 @@ Proper normalization is crucial for:
 - Handling different acquisition settings
 """
 
-from typing import Optional, Tuple, cast
+from __future__ import annotations
+
+from typing import cast
 
 import numpy as np
+
+TargetRange = tuple[float, float]
+
+
+def _validate_target_range(target_range: TargetRange) -> TargetRange:
+    target_min, target_max = target_range
+    if target_min >= target_max:
+        raise ValueError("target_range must be in ascending order")
+    return float(target_min), float(target_max)
+
+
+def _prepare_channel_stats(values: np.ndarray | None, default: tuple[float, ...], name: str) -> np.ndarray:
+    array = np.asarray(default if values is None else values, dtype=np.float64)
+    if array.ndim == 0:
+        array = array.reshape(1)
+    if array.ndim != 1:
+        raise ValueError(f"{name} must be a scalar or 1-D array")
+    if name == "std" and np.any(array <= 0):
+        raise ValueError("std values must be positive")
+    return array
 
 
 def normalize_image(
     image: np.ndarray,
     method: str = "minmax",
-    target_range: Tuple[float, float] = (0, 1),
+    target_range: TargetRange = (0, 1),
 ) -> np.ndarray:
     """
     Normalize image intensities to a target range.
@@ -29,6 +51,7 @@ def normalize_image(
         Normalized image
     """
     img = image.astype(np.float64)
+    target_min, target_max = _validate_target_range(target_range)
 
     if method == "minmax":
         # Min-max normalization
@@ -37,9 +60,9 @@ def normalize_image(
 
         if max_val - min_val > 0:
             normalized = (img - min_val) / (max_val - min_val)
-            normalized = normalized * (target_range[1] - target_range[0]) + target_range[0]
+            normalized = normalized * (target_max - target_min) + target_min
         else:
-            normalized = np.full_like(img, target_range[0])
+            normalized = np.full_like(img, target_min)
 
     elif method == "zscore":
         # Z-score normalization (mean=0, std=1)
@@ -54,9 +77,9 @@ def normalize_image(
 
         if p95 - p5 > 0:
             normalized = np.clip((img - p5) / (p95 - p5), 0, 1)
-            normalized = normalized * (target_range[1] - target_range[0]) + target_range[0]
+            normalized = normalized * (target_max - target_min) + target_min
         else:
-            normalized = np.full_like(img, target_range[0])
+            normalized = np.full_like(img, target_min)
     else:
         raise ValueError(f"Unknown normalization method: {method}")
 
@@ -65,8 +88,8 @@ def normalize_image(
 
 def standardize_image(
     image: np.ndarray,
-    mean: Optional[np.ndarray] = None,
-    std: Optional[np.ndarray] = None,
+    mean: np.ndarray | None = None,
+    std: np.ndarray | None = None,
 ) -> np.ndarray:
     """
     Standardize image using ImageNet statistics or provided values.
@@ -82,11 +105,8 @@ def standardize_image(
     Returns:
         Standardized image
     """
-    # ImageNet statistics
-    if mean is None:
-        mean = np.array([0.485, 0.456, 0.406])
-    if std is None:
-        std = np.array([0.229, 0.224, 0.225])
+    mean_values = _prepare_channel_stats(mean, (0.485, 0.456, 0.406), "mean")
+    std_values = _prepare_channel_stats(std, (0.229, 0.224, 0.225), "std")
 
     img = image.astype(np.float64)
 
@@ -97,9 +117,22 @@ def standardize_image(
     # Handle grayscale images
     if img.ndim == 2:
         img = np.stack([img, img, img], axis=-1)
+    elif img.ndim != 3:
+        raise ValueError("image must be 2-D grayscale or 3-D multi-channel")
+
+    channel_count = img.shape[2]
+    if mean_values.size not in (1, channel_count):
+        raise ValueError("mean must contain either one value or one value per image channel")
+    if std_values.size not in (1, channel_count):
+        raise ValueError("std must contain either one value or one value per image channel")
+
+    if mean_values.size == 1:
+        mean_values = np.repeat(mean_values, channel_count)
+    if std_values.size == 1:
+        std_values = np.repeat(std_values, channel_count)
 
     # Standardize
-    standardized = (img - mean) / std
+    standardized = (img - mean_values.reshape(1, 1, -1)) / std_values.reshape(1, 1, -1)
 
     return cast(np.ndarray, standardized)
 
@@ -126,6 +159,11 @@ def depth_compensation(
     Returns:
         Depth-compensated image
     """
+    if image.ndim != 2:
+        raise ValueError("image must be a 2-D grayscale array")
+    if attenuation_coefficient < 0:
+        raise ValueError("attenuation_coefficient must be non-negative")
+
     img = image.astype(np.float64)
 
     # Create depth-dependent gain
@@ -136,6 +174,9 @@ def depth_compensation(
     compensated = img * gain[:, np.newaxis]
 
     # Normalize to original range
-    compensated = (compensated / compensated.max()) * 255
+    peak = float(compensated.max())
+    if peak <= 0.0:
+        return np.zeros_like(img, dtype=np.uint8)
+    compensated = np.clip((compensated / peak) * 255.0, 0.0, 255.0)
 
     return cast(np.ndarray, compensated.astype(np.uint8))

@@ -4,18 +4,22 @@ Image I/O utilities for ultrasound images.
 Supports common formats and DICOM medical imaging format.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, Tuple, Union, cast
+from typing import cast
 
 import cv2
 import numpy as np
-from PIL import Image
+
+ImagePath = str | Path
+ImageSize = tuple[int, int]
 
 
 def load_image(
-    path: Union[str, Path],
+    path: ImagePath,
     grayscale: bool = False,
-    target_size: Optional[Tuple[int, int]] = None,
+    target_size: ImageSize | None = None,
 ) -> np.ndarray:
     """
     Load an image from file.
@@ -34,25 +38,26 @@ def load_image(
         raise FileNotFoundError(f"Image not found: {path}")
 
     # Load image
-    if grayscale:
-        img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-    else:
-        img = cv2.imread(str(path), cv2.IMREAD_COLOR)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    read_flag = cv2.IMREAD_GRAYSCALE if grayscale else cv2.IMREAD_COLOR
+    img = cv2.imread(str(path), read_flag)
 
     if img is None:
         raise ValueError(f"Failed to load image: {path}")
 
-    # Resize if needed
+    if not grayscale:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
     if target_size is not None:
+        if target_size[0] <= 0 or target_size[1] <= 0:
+            raise ValueError("target_size must contain positive height and width")
         img = cv2.resize(img, (target_size[1], target_size[0]))
 
-    return img
+    return cast(np.ndarray, img)
 
 
 def save_image(
     image: np.ndarray,
-    path: Union[str, Path],
+    path: ImagePath,
     normalize: bool = True,
 ) -> None:
     """
@@ -70,21 +75,23 @@ def save_image(
 
     # Normalize if needed
     if normalize and img.max() <= 1.0:
-        img = (img * 255).astype(np.uint8)
-    elif normalize and img.dtype != np.uint8:
-        img = img.astype(np.uint8)
+        img = np.rint(np.clip(img, 0.0, 1.0) * 255.0)
+
+    if img.dtype != np.uint8:
+        img = np.clip(img, 0, 255).astype(np.uint8)
 
     # Convert RGB to BGR for OpenCV
     if img.ndim == 3 and img.shape[2] == 3:
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    cv2.imwrite(str(path), img)
+    if not cv2.imwrite(str(path), img):
+        raise OSError(f"Failed to save image: {path}")
 
 
 def load_dicom(
-    path: Union[str, Path],
-    window_center: Optional[float] = None,
-    window_width: Optional[float] = None,
+    path: ImagePath,
+    window_center: float | None = None,
+    window_width: float | None = None,
 ) -> np.ndarray:
     """
     Load a DICOM image file.
@@ -131,8 +138,8 @@ def load_dicom(
 
 
 def load_nifti(
-    path: Union[str, Path],
-    slice_idx: Optional[int] = None,
+    path: ImagePath,
+    slice_idx: int | None = None,
 ) -> np.ndarray:
     """
     Load a NIfTI image file (common for 3D medical imaging).

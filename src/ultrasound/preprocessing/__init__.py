@@ -14,7 +14,7 @@ before applying machine learning algorithms.
 
 from .denoising import admm_tv_denoising, bilateral_filter, total_variation_denoising
 from .enhancement import ContrastEnhancer, apply_clahe, gamma_correction, histogram_equalization
-from .normalization import normalize_image, standardize_image
+from .normalization import depth_compensation, normalize_image, standardize_image
 from .speckle import SpeckleReducer, frost_filter, lee_filter, median_speckle_filter
 
 __all__ = [
@@ -26,6 +26,7 @@ __all__ = [
     "apply_clahe",
     "histogram_equalization",
     "gamma_correction",
+    "depth_compensation",
     "normalize_image",
     "standardize_image",
     "total_variation_denoising",

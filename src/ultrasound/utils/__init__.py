@@ -7,7 +7,7 @@ Includes:
 - Metrics computation
 """
 
-from .io import load_dicom, load_image, save_image
+from .io import load_dicom, load_image, load_nifti, save_image
 from .metrics import (
     compute_accuracy,
     compute_auc_roc,
@@ -27,6 +27,7 @@ __all__ = [
     "load_image",
     "save_image",
     "load_dicom",
+    "load_nifti",
     "compute_dice",
     "compute_iou",
     "compute_accuracy",
