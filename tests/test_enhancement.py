@@ -45,6 +45,17 @@ class TestContrastEnhancer:
         ):
             assert key in stats
 
+    @pytest.mark.parametrize("method", ["gamma", "logarithmic", "adaptive"])
+    def test_other_methods_return_image(self, method: str, sample_grayscale) -> None:
+        enhancer = ContrastEnhancer(method=method)
+        result = enhancer.enhance(sample_grayscale)
+        assert result.shape == sample_grayscale.shape
+
+    def test_analyze_contrast_supports_rgb(self, sample_rgb) -> None:
+        enhancer = ContrastEnhancer()
+        stats = enhancer.analyze_contrast(sample_rgb)
+        assert stats["dynamic_range"] >= 0
+
 
 class TestGammaCorrection:
     def test_identity(self, sample_grayscale) -> None:
@@ -79,6 +90,28 @@ def test_histogram_equalization_supports_rgb(sample_rgb) -> None:
     result = histogram_equalization(sample_rgb)
     assert result.shape == sample_rgb.shape
     assert result.dtype == np.uint8
+
+
+def test_apply_clahe_uses_first_channel_for_non_rgb_images() -> None:
+    image = np.dstack(
+        [
+            np.full((8, 8), 10, dtype=np.uint8),
+            np.full((8, 8), 20, dtype=np.uint8),
+        ]
+    )
+    result = apply_clahe(image)
+    assert result.shape == image.shape[:2]
+
+
+def test_histogram_equalization_uses_first_channel_for_non_rgb_images() -> None:
+    image = np.dstack(
+        [
+            np.tile(np.arange(8, dtype=np.uint8), (8, 1)),
+            np.zeros((8, 8), dtype=np.uint8),
+        ]
+    )
+    result = histogram_equalization(image)
+    assert result.shape == image.shape[:2]
 
 
 def test_logarithmic_transform_normalizes_output() -> None:

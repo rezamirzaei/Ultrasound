@@ -6,6 +6,7 @@ from scipy.sparse import issparse
 from ultrasound.preprocessing.denoising import (
     _build_difference_operators,
     admm_tv_denoising,
+    anisotropic_diffusion,
     bilateral_filter,
     soft_threshold,
     total_variation_denoising,
@@ -91,6 +92,10 @@ class TestAdmmTvDenoising:
         _, info = admm_tv_denoising(sample_grayscale, n_iter=30, adaptive_rho=True)
         assert len(info["rho_history"]) >= 1
 
+    def test_fixed_rho_history_when_adaptive_updates_disabled(self, sample_grayscale):
+        _, info = admm_tv_denoising(sample_grayscale, n_iter=8, adaptive_rho=False)
+        assert info["rho_history"] == [1.0]
+
 
 class TestBilateralFilter:
     def test_output_shape(self, sample_grayscale):
@@ -100,3 +105,24 @@ class TestBilateralFilter:
     def test_constant_image_unchanged(self):
         image = np.full((32, 32), 128, dtype=np.uint8)
         np.testing.assert_array_equal(bilateral_filter(image), image)
+
+    def test_float_input_is_clipped_to_uint8(self):
+        image = np.array([[300.0, -5.0], [128.2, 64.8]], dtype=np.float64)
+        result = bilateral_filter(image, d=3)
+        assert result.dtype == np.uint8
+        assert result.min() >= 0
+        assert result.max() <= 255
+
+
+class TestAnisotropicDiffusion:
+    def test_output_shape_dtype_and_bounds(self, sample_grayscale):
+        result = anisotropic_diffusion(sample_grayscale, n_iter=3, option=1)
+        assert result.shape == sample_grayscale.shape
+        assert result.dtype == np.uint8
+        assert result.min() >= 0
+        assert result.max() <= 255
+
+    def test_quadratic_option_preserves_constant_images(self):
+        image = np.full((24, 24), 90, dtype=np.uint8)
+        result = anisotropic_diffusion(image, n_iter=5, option=2)
+        np.testing.assert_array_equal(result, image)
