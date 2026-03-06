@@ -237,6 +237,131 @@ class TestYoloDatasetPreparer:
         assert "train:" in content
         assert "val:" in content
 
+    def test_prepare_with_single_image_uses_image_for_both_splits(self, tmp_path: Path) -> None:
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(images_dir / "solo.png")
+
+        csv_path = tmp_path / "train.csv"
+        with csv_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=["image_id", "x_min", "y_min", "x_max", "y_max", "class_id"],
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "image_id": "solo",
+                    "x_min": "4",
+                    "y_min": "5",
+                    "x_max": "20",
+                    "y_max": "21",
+                    "class_id": "0",
+                }
+            )
+
+        output_dir = tmp_path / "yolo_out"
+        preparer = YoloDatasetPreparer(
+            source_images_dir=images_dir,
+            annotations_csv=csv_path,
+            output_dir=output_dir,
+            class_names=["liver"],
+        )
+        preparer.prepare()
+
+        assert (output_dir / "train" / "images" / "solo.png").is_file()
+        assert (output_dir / "val" / "images" / "solo.png").is_file()
+
+    def test_prepare_clears_stale_outputs_between_runs(
+        self, mini_csv_dataset: tuple[Path, Path, Path]
+    ) -> None:
+        images_dir, csv_path, base = mini_csv_dataset
+        output_dir = base / "yolo_out_reset"
+
+        preparer = YoloDatasetPreparer(
+            source_images_dir=images_dir,
+            annotations_csv=csv_path,
+            output_dir=output_dir,
+            class_names=["liver"],
+        )
+        preparer.prepare()
+
+        stale_label = output_dir / "train" / "labels" / "stale.txt"
+        stale_label.write_text("junk\n", encoding="utf-8")
+
+        preparer.prepare()
+
+        assert not stale_label.exists()
+
+    def test_prepare_skips_invalid_rows_and_missing_images(self, tmp_path: Path) -> None:
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        Image.fromarray(np.zeros((40, 40, 3), dtype=np.uint8)).save(images_dir / "keep.png")
+
+        csv_path = tmp_path / "train.csv"
+        with csv_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=["image_id", "x_min", "y_min", "x_max", "y_max", "class_id"],
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "image_id": "keep",
+                    "x_min": "2",
+                    "y_min": "3",
+                    "x_max": "20",
+                    "y_max": "21",
+                    "class_id": "0",
+                }
+            )
+            writer.writerow(
+                {
+                    "image_id": "keep",
+                    "x_min": "8",
+                    "y_min": "9",
+                    "x_max": "4",
+                    "y_max": "10",
+                    "class_id": "0",
+                }
+            )
+            writer.writerow(
+                {
+                    "image_id": "missing",
+                    "x_min": "2",
+                    "y_min": "3",
+                    "x_max": "20",
+                    "y_max": "21",
+                    "class_id": "0",
+                }
+            )
+            writer.writerow(
+                {
+                    "image_id": "keep",
+                    "x_min": "2",
+                    "y_min": "3",
+                    "x_max": "20",
+                    "y_max": "21",
+                    "class_id": "5",
+                }
+            )
+
+        output_dir = tmp_path / "yolo_out_filtered"
+        preparer = YoloDatasetPreparer(
+            source_images_dir=images_dir,
+            annotations_csv=csv_path,
+            output_dir=output_dir,
+            class_names=["liver"],
+        )
+        preparer.prepare()
+
+        label_files = list((output_dir / "train" / "labels").glob("*.txt")) + list(
+            (output_dir / "val" / "labels").glob("*.txt")
+        )
+        assert len(label_files) >= 1
+        contents = "\n".join(path.read_text(encoding="utf-8") for path in label_files)
+        assert "5 " not in contents
+
 
 # ---------------------------------------------------------------------------
 # YoloTrainingConfig tests
@@ -256,6 +381,14 @@ class TestYoloTrainingConfig:
     def test_invalid_batch_size(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="batch_size must be >= 1"):
             YoloTrainingConfig(dataset_yaml=tmp_path / "data.yaml", batch_size=0)
+
+    def test_invalid_learning_rate(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="learning_rate must be > 0"):
+            YoloTrainingConfig(dataset_yaml=tmp_path / "data.yaml", learning_rate=0)
+
+    def test_invalid_image_size(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="image_size must be >= 32"):
+            YoloTrainingConfig(dataset_yaml=tmp_path / "data.yaml", image_size=16)
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +473,6 @@ class TestYoloUtils:
                 image_width=100,
                 image_height=100,
             )
-
 
 
 

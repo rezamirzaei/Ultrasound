@@ -18,6 +18,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from ultrasound.api.models.schemas import YoloLabel, YoloXyxyBox
+from ultrasound.api.services.yolo_utils import format_yolo_labels, xyxy_to_yolo_label
+
 logger = logging.getLogger("inphase.yolo.trainer")
 
 
@@ -48,6 +51,16 @@ class YoloTrainingConfig:
             raise ValueError("epochs must be >= 1")
         if self.batch_size < 1:
             raise ValueError("batch_size must be >= 1")
+        if self.image_size < 32:
+            raise ValueError("image_size must be >= 32")
+        if self.learning_rate <= 0:
+            raise ValueError("learning_rate must be > 0")
+        if self.patience < 1:
+            raise ValueError("patience must be >= 1")
+        if self.workers < 0:
+            raise ValueError("workers must be >= 0")
+        if self.freeze_layers < 0:
+            raise ValueError("freeze_layers must be >= 0")
 
 
 @dataclass
@@ -90,6 +103,10 @@ class YoloDatasetPreparer:
         self.train_ratio = train_ratio
         self.image_extensions = image_extensions
         self.seed = seed
+        if not self.class_names:
+            raise ValueError("class_names must contain at least one class")
+        if not 0.0 < float(self.train_ratio) < 1.0:
+            raise ValueError("train_ratio must be between 0 and 1")
 
     # -- public API ----------------------------------------------------------
 
@@ -98,12 +115,14 @@ class YoloDatasetPreparer:
         logger.info("Preparing YOLO dataset in %s", self.output_dir)
 
         annotations = self._load_annotations()
-        image_ids = sorted(annotations.keys())
+        image_ids = sorted(image_id for image_id in annotations if self._find_image(image_id) is not None)
         if not image_ids:
             raise FileNotFoundError(
-                f"No annotated images found. CSV={self.annotations_csv}, "
+                f"No usable annotated images found. CSV={self.annotations_csv}, "
                 f"images_dir={self.source_images_dir}"
             )
+
+        self._reset_output_dir()
 
         train_ids, val_ids = self._split(image_ids)
         logger.info("Split: %d train / %d val", len(train_ids), len(val_ids))
@@ -123,32 +142,63 @@ class YoloDatasetPreparer:
         with self.annotations_csv.open(newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(fh)
             for row in reader:
-                image_id = row["image_id"].strip()
-                annotations.setdefault(image_id, []).append({
-                    "x_min": float(row["x_min"]),
-                    "y_min": float(row["y_min"]),
-                    "x_max": float(row["x_max"]),
-                    "y_max": float(row["y_max"]),
-                    "class_id": int(row.get("class_id", 0)),
-                })
+                try:
+                    image_id = str(row["image_id"]).strip()
+                    ann = {
+                        "x_min": float(row["x_min"]),
+                        "y_min": float(row["y_min"]),
+                        "x_max": float(row["x_max"]),
+                        "y_max": float(row["y_max"]),
+                        "class_id": int(row.get("class_id", 0)),
+                    }
+                except (KeyError, TypeError, ValueError):
+                    logger.warning("Skipping malformed annotation row: %s", row)
+                    continue
+
+                if not image_id:
+                    logger.warning("Skipping annotation row with empty image_id")
+                    continue
+                if ann["class_id"] < 0 or ann["class_id"] >= len(self.class_names):
+                    logger.warning("Skipping annotation row with out-of-range class_id for %s", image_id)
+                    continue
+                if not np.isfinite([ann["x_min"], ann["y_min"], ann["x_max"], ann["y_max"]]).all():
+                    logger.warning("Skipping non-finite annotation row for %s", image_id)
+                    continue
+                if ann["x_max"] <= ann["x_min"] or ann["y_max"] <= ann["y_min"]:
+                    logger.warning("Skipping invalid bbox annotation for %s", image_id)
+                    continue
+
+                annotations.setdefault(image_id, []).append(ann)
         return annotations
 
     def _split(self, image_ids: list[str]) -> tuple[list[str], list[str]]:
+        if len(image_ids) == 1:
+            return [image_ids[0]], [image_ids[0]]
+
         rng = np.random.RandomState(self.seed)
         indices = rng.permutation(len(image_ids))
-        n_train = max(1, int(len(image_ids) * self.train_ratio))
+        n_train = int(round(len(image_ids) * self.train_ratio))
+        n_train = min(max(1, n_train), len(image_ids) - 1)
         train = [image_ids[i] for i in indices[:n_train]]
         val = [image_ids[i] for i in indices[n_train:]]
         return train, val
 
+    def _reset_output_dir(self) -> None:
+        for split_name in ("train", "val"):
+            split_dir = self.output_dir / split_name
+            if split_dir.exists():
+                shutil.rmtree(split_dir)
+        yaml_path = self.output_dir / "data.yaml"
+        yaml_path.unlink(missing_ok=True)
+
     def _find_image(self, image_id: str) -> Path | None:
         for ext in self.image_extensions:
             candidate = self.source_images_dir / f"{image_id}{ext}"
-            if candidate.exists():
+            if candidate.is_file():
                 return candidate
         # Try with the image_id as-is (maybe it already has extension).
         candidate = self.source_images_dir / image_id
-        if candidate.exists():
+        if candidate.is_file():
             return candidate
         return None
 
@@ -175,34 +225,32 @@ class YoloDatasetPreparer:
             with Image.open(dest_image) as img:
                 img_w, img_h = img.size
 
-            label_lines: list[str] = []
-            for ann in annotations.get(image_id, []):
-                label_lines.append(
-                    self._xyxy_to_yolo_line(ann, img_w, img_h)
-                )
-
+            labels_text = format_yolo_labels(
+                [
+                    self._xyxy_to_yolo_label(ann, img_w, img_h)
+                    for ann in annotations.get(image_id, [])
+                ]
+            )
             label_path = labels_dir / f"{src_path.stem}.txt"
-            label_path.write_text("\n".join(label_lines) + "\n", encoding="utf-8")
+            label_path.write_text(labels_text, encoding="utf-8")
 
-    @staticmethod
-    def _xyxy_to_yolo_line(ann: dict[str, Any], img_w: int, img_h: int) -> str:
-        """Convert xyxy pixel coords to YOLO normalized xywh format."""
-        x_min, y_min = float(ann["x_min"]), float(ann["y_min"])
-        x_max, y_max = float(ann["x_max"]), float(ann["y_max"])
+    def _xyxy_to_yolo_label(self, ann: dict[str, Any], img_w: int, img_h: int) -> YoloLabel:
+        """Convert xyxy pixel coords to a validated YOLO label object."""
         class_id = int(ann["class_id"])
-
-        x_center = (x_min + x_max) / 2.0 / img_w
-        y_center = (y_min + y_max) / 2.0 / img_h
-        width = (x_max - x_min) / img_w
-        height = (y_max - y_min) / img_h
-
-        # Clamp to [0, 1]
-        x_center = max(0.0, min(1.0, x_center))
-        y_center = max(0.0, min(1.0, y_center))
-        width = max(0.001, min(1.0, width))
-        height = max(0.001, min(1.0, height))
-
-        return f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}"
+        class_name = self.class_names[class_id]
+        bbox = YoloXyxyBox(
+            x1=float(ann["x_min"]),
+            y1=float(ann["y_min"]),
+            x2=float(ann["x_max"]),
+            y2=float(ann["y_max"]),
+        )
+        return xyxy_to_yolo_label(
+            bbox=bbox,
+            class_id=class_id,
+            class_name=class_name,
+            image_width=img_w,
+            image_height=img_h,
+        )
 
     def _write_data_yaml(self) -> Path:
         yaml_path = self.output_dir / "data.yaml"
@@ -240,6 +288,10 @@ class YoloTrainer:
     def train(self, config: YoloTrainingConfig) -> YoloTrainingResult:
         """Execute a YOLO training run and return structured results."""
         from ultralytics import YOLO
+
+        if not Path(config.dataset_yaml).is_file():
+            raise FileNotFoundError(f"YOLO dataset YAML not found: {config.dataset_yaml}")
+        config.project_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
             "Starting YOLO training: weights=%s epochs=%d imgsz=%d batch=%d",
@@ -297,6 +349,11 @@ class YoloTrainer:
         """Run validation on a trained model and return metrics."""
         from ultralytics import YOLO
 
+        if not Path(weights_path).is_file():
+            raise FileNotFoundError(f"YOLO weights not found: {weights_path}")
+        if not Path(data_yaml).is_file():
+            raise FileNotFoundError(f"YOLO dataset YAML not found: {data_yaml}")
+
         model = YOLO(str(weights_path))
         results = model.val(data=str(data_yaml), imgsz=image_size, verbose=False)
         return self._extract_metrics(results)
@@ -341,4 +398,3 @@ class YoloTrainer:
                         pass
 
         return metrics
-

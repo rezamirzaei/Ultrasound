@@ -61,7 +61,9 @@ class LiverDatasetPaths:
     @property
     def is_ready(self) -> bool:
         dr = self.data_root
-        return any((dr / cat / cat / "image").is_dir() for cat in _CATEGORIES)
+        if any((dr / cat / cat / "image").is_dir() for cat in _CATEGORIES):
+            return True
+        return self.train_images_dir.is_dir() and self.annotations_csv.is_file()
 
     @property
     def annotations_csv(self) -> Path:

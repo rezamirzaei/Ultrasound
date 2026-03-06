@@ -60,6 +60,13 @@ class LiverYoloLabService:
     def _paths(self) -> LiverDatasetPaths:
         return resolve_liver_paths(self._config.data_dir)
 
+    def _resolve_category(self, category: str) -> str:
+        normalized = category.strip().lower()
+        for candidate in ("Benign", "Malignant", "Normal"):
+            if candidate.lower() == normalized:
+                return candidate
+        raise FileNotFoundError(f"Unknown liver category '{category}'")
+
     # -- Trained weights resolution -------------------------------------------
 
     def resolve_trained_weights(self) -> Path | None:
@@ -77,7 +84,7 @@ class LiverYoloLabService:
         weights = self.resolve_trained_weights()
         if weights is not None:
             return str(weights)
-        return "yolo11n.pt"
+        return self._yolo_service.DEFAULT_MODEL_CANDIDATES[0]
 
     # -- Status ---------------------------------------------------------------
 
@@ -110,11 +117,22 @@ class LiverYoloLabService:
         flat_dir = paths.train_images_dir
         if not flat_dir.is_dir():
             return []
-        prefix = category + "_"
-        return sorted(
+        prefix = self._resolve_category(category) + "_"
+        image_ids = sorted(
             f.stem for f in flat_dir.iterdir()
             if f.is_file() and f.stem.startswith(prefix)
         )
+        if image_ids:
+            return image_ids
+
+        # Synthetic smoke-test datasets store flat image ids without category prefixes.
+        has_prefixed_ids = any(
+            f.is_file() and any(f.stem.startswith(f"{candidate}_") for candidate in ("Benign", "Malignant", "Normal"))
+            for f in flat_dir.iterdir()
+        )
+        if not has_prefixed_ids:
+            return sorted(f.stem for f in flat_dir.iterdir() if f.is_file())
+        return []
 
     def get_sample(self, category: str, sample_index: int) -> LiverSampleResponse:
         """Load a liver ultrasound sample by category and index."""
@@ -124,10 +142,11 @@ class LiverYoloLabService:
                 "Liver dataset not found. Download it first with "
                 "scripts/download_liver_ultrasound_detection.py"
             )
+        resolved_category = self._resolve_category(category)
 
-        image_ids = self._list_images_for_category(paths, category)
+        image_ids = self._list_images_for_category(paths, resolved_category)
         if not image_ids:
-            raise FileNotFoundError(f"No images found for category '{category}'")
+            raise FileNotFoundError(f"No images found for category '{resolved_category}'")
 
         resolved_index = sample_index % len(image_ids)
         image_id = image_ids[resolved_index]
@@ -157,7 +176,7 @@ class LiverYoloLabService:
                 ))
 
         return LiverSampleResponse(
-            category=category,
+            category=resolved_category,
             sample_index=resolved_index,
             total_samples=len(image_ids),
             image_id=image_id,
@@ -172,9 +191,15 @@ class LiverYoloLabService:
     def load_image_rgb(self, category: str, sample_index: int) -> np.ndarray:
         """Load a liver sample as an RGB numpy array for inference."""
         paths = self._paths()
-        image_ids = self._list_images_for_category(paths, category)
+        if not paths.is_ready:
+            raise FileNotFoundError(
+                "Liver dataset not found. Download it first with "
+                "scripts/download_liver_ultrasound_detection.py"
+            )
+        resolved_category = self._resolve_category(category)
+        image_ids = self._list_images_for_category(paths, resolved_category)
         if not image_ids:
-            raise FileNotFoundError(f"No images for category '{category}'")
+            raise FileNotFoundError(f"No images for category '{resolved_category}'")
         resolved_index = sample_index % len(image_ids)
         image_id = image_ids[resolved_index]
         candidates = list(paths.train_images_dir.glob(f"{image_id}.*"))
@@ -202,5 +227,3 @@ class LiverYoloLabService:
             request = request.model_copy(update={"model": self.default_model})
 
         return self._yolo_service.predict(image_rgb=image_rgb, request=request)
-
-

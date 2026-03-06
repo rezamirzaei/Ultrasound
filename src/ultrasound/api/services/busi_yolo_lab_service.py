@@ -71,6 +71,13 @@ class BusiYoloLabService:
     def _manifest_path(self) -> Path:
         return self._models_dir / "model_manifest.json"
 
+    @property
+    def default_model(self) -> str:
+        model_path = self._model_path()
+        if model_path.exists():
+            return str(model_path)
+        return self.yolo_service.DEFAULT_MODEL_CANDIDATES[0]
+
     def model_status(self) -> BusiYoloModelStatus:
         model_path = self._model_path()
         downloaded = model_path.exists()
@@ -156,13 +163,24 @@ class BusiYoloLabService:
         )
 
     def predict(self, class_name: str, sample_index: int, request: YoloPredictRequest) -> YoloPredictResponse:
-        model_path = Path(request.model)
+        model_path = Path(request.model).expanduser()
         recommended_path = self._model_path()
-        if model_path == recommended_path and not recommended_path.exists():
+        try:
+            requested_matches_recommended = model_path.resolve(strict=False) == recommended_path.resolve(
+                strict=False
+            )
+        except OSError:
+            requested_matches_recommended = model_path == recommended_path
+
+        if requested_matches_recommended and not recommended_path.exists():
             raise ValueError(
                 "Recommended BUSI YOLO weights are not downloaded yet. "
                 "Call the model download endpoint first."
             )
+
+        generic_models = {"", *self.yolo_service.DEFAULT_MODEL_CANDIDATES}
+        if request.model.strip() in generic_models and recommended_path.exists():
+            request = request.model_copy(update={"model": str(recommended_path)})
 
         sample = self.dataset_repository.get_busi_sample(class_name=class_name, index=sample_index)
         return self.yolo_service.predict(image_rgb=sample.image_rgb, request=request)
