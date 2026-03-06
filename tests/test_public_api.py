@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 import ultrasound
 
@@ -27,6 +28,30 @@ def test_api_main_resolves_lazy_app(monkeypatch) -> None:
     assert api_main.app is sentinel
     assert "app" in dir(api_main)
     assert "create_app" in dir(api_main)
+
+
+def test_api_main_lazy_app_creates_sqlite_parent_dirs(monkeypatch, tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    nested_dir = project_root / "workspace" / "leaf"
+    project_root.mkdir(parents=True, exist_ok=True)
+    nested_dir.mkdir(parents=True, exist_ok=True)
+    (project_root / "pyproject.toml").write_text("[build-system]\nrequires = []\n", encoding="utf-8")
+    (project_root / "src").mkdir(parents=True, exist_ok=True)
+
+    database_path = project_root / "runtime" / "db" / "inphase.sqlite3"
+    monkeypatch.chdir(nested_dir)
+    monkeypatch.setenv("INPHASE_DATABASE_URL", f"sqlite:///{database_path}")
+
+    api_app = importlib.reload(importlib.import_module("ultrasound.api.app"))
+    api_main = importlib.reload(importlib.import_module("ultrasound.api.main"))
+    api_app.__dict__.pop("app", None)
+    api_main.__dict__.pop("app", None)
+
+    resolved_app = api_main.app
+
+    assert resolved_app.title == "Ultrasound Imaging Toolkit API"
+    assert database_path.parent.exists()
+    resolved_app.state.container.db.engine.dispose()
 
 
 def test_api_package_resolves_lazy_create_app(monkeypatch) -> None:
