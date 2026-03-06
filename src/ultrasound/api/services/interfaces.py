@@ -48,6 +48,10 @@ class BusiSampleRepository(Protocol):
     def get_busi_sample(self, class_name: str, index: int) -> BusiSampleRecord: ...
 
 
+class BusiDatasetRepository(BusiSampleRepository, Protocol):
+    def get_busi_counts(self) -> dict[str, int]: ...
+
+
 class BusiTrainingRepository(Protocol):
     def list_busi_training_samples(self, include_normal: bool) -> list[BusiTrainingSampleRecord]: ...
 
@@ -58,24 +62,29 @@ class BusiTrainingRepository(Protocol):
     def save_busi_training_run(self, run: BusiTrainingRunRecord) -> BusiTrainingRunRecord: ...
 
 
-class DashboardDatasetRepository(Protocol):
-    def get_busi_counts(self) -> dict[str, int]: ...
+class BusiUploadRepository(Protocol):
+    def add_busi_uploaded_sample(
+        self,
+        class_name: str,
+        split: str,
+        image_filename: str,
+        image_blob: bytes,
+        mask_blob: bytes | None,
+    ) -> BusiUploadRecord: ...
 
+
+class BusiSyncRepository(Protocol):
+    def sync_busi_from_filesystem(self) -> int: ...
+
+
+class NdtSampleRepository(Protocol):
     def list_ndt_samples(self) -> list[str]: ...
 
-    def get_industrial_counts(self) -> dict[str, dict[str, dict[str, int]]]: ...
-
-    def get_busi_sample(self, class_name: str, index: int) -> BusiSampleRecord: ...
-
-    def get_industrial_sample(
-        self,
-        dataset_name: str,
-        split: str,
-        class_name: str,
-        index: int,
-    ) -> IndustrialSampleRecord: ...
-
     def load_ndt_sample(self, sample_name: str) -> NdtSampleRecord: ...
+
+
+class NdtSyncRepository(Protocol):
+    def sync_ndt_from_filesystem(self) -> int: ...
 
 
 class NdtDetectionAnalyzer(Protocol):
@@ -88,36 +97,19 @@ class NdtDetectionAnalyzer(Protocol):
     ) -> list[NdtAnalyzedDefect]: ...
 
 
-class DataIngestionRepository(Protocol):
-    def sync_busi_from_filesystem(self) -> int: ...
+class IndustrialSampleRepository(Protocol):
+    def get_industrial_counts(self) -> dict[str, dict[str, dict[str, int]]]: ...
 
-    def sync_ndt_from_filesystem(self) -> int: ...
-
-    def sync_industrial_from_filesystem(self) -> int: ...
-
-
-class DatasetUploadRepository(Protocol):
-    def add_busi_uploaded_sample(
-        self,
-        class_name: str,
-        split: str,
-        image_filename: str,
-        image_blob: bytes,
-        mask_blob: bytes | None,
-    ) -> BusiUploadRecord: ...
-
-    def add_industrial_uploaded_sample(
+    def get_industrial_sample(
         self,
         dataset_name: str,
         split: str,
         class_name: str,
-        image_filename: str,
-        image_blob: bytes,
-        annotation_blob: bytes | None,
-    ) -> IndustrialUploadRecord: ...
+        index: int,
+    ) -> IndustrialSampleRecord: ...
 
 
-class IndustrialTrainingRepository(Protocol):
+class IndustrialTrainingRepository(IndustrialSampleRepository, Protocol):
     def list_industrial_training_samples(
         self, dataset_name: str
     ) -> tuple[list[IndustrialTrainingSampleRecord], dict[str, int], list[str]]: ...
@@ -141,6 +133,22 @@ class IndustrialTrainingRepository(Protocol):
         class_name: str,
         index: int,
     ) -> IndustrialSampleRecord: ...
+
+
+class IndustrialUploadRepository(Protocol):
+    def add_industrial_uploaded_sample(
+        self,
+        dataset_name: str,
+        split: str,
+        class_name: str,
+        image_filename: str,
+        image_blob: bytes,
+        annotation_blob: bytes | None,
+    ) -> IndustrialUploadRecord: ...
+
+
+class IndustrialSyncRepository(Protocol):
+    def sync_industrial_from_filesystem(self) -> int: ...
 
 
 class JobQueueRepository(Protocol):

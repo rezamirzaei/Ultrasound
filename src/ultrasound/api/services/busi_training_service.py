@@ -16,6 +16,7 @@ from ultrasound.api.models.schemas import (
     BusiTrainingResponse,
 )
 from ultrasound.api.services.interfaces import BusiTrainingRepository
+from ultrasound.api.services.service_errors import InvalidRequestError
 
 
 class BusiTrainingService:
@@ -54,26 +55,26 @@ class BusiTrainingService:
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, int], list[str]]:
         samples = self.dataset_repository.list_busi_training_samples(include_normal=include_normal)
         if not samples:
-            raise ValueError("No BUSI samples were found in SQL storage.")
+            raise InvalidRequestError("No BUSI samples were found in SQL storage.")
 
         train_samples = [sample for sample in samples if sample.split == "train"]
         test_samples = [sample for sample in samples if sample.split == "test"]
         if not train_samples or not test_samples:
-            raise ValueError("BUSI SQL dataset must contain both train and test samples.")
+            raise InvalidRequestError("BUSI SQL dataset must contain both train and test samples.")
 
         class_counts: dict[str, int] = {}
         for sample in samples:
             class_counts[sample.class_name] = int(class_counts.get(sample.class_name, 0) + 1)
 
         if include_normal and class_counts.get("normal", 0) <= 0:
-            raise ValueError(
+            raise InvalidRequestError(
                 "include_normal=True requires normal BUSI samples to be present in SQL storage."
             )
 
         train_labels = sorted({sample.label for sample in train_samples})
         test_labels = sorted({sample.label for sample in test_samples})
         if not set(test_labels).issubset(set(train_labels)):
-            raise ValueError(
+            raise InvalidRequestError(
                 "BUSI train split does not cover all classes present in test split. "
                 "Re-sync SQL dataset."
             )
@@ -235,7 +236,7 @@ class BusiTrainingService:
             learning_rate=request.learning_rate,
         )
         if not curve:
-            raise ValueError("Training produced no curve points.")
+            raise InvalidRequestError("Training produced no curve points.")
 
         last = curve[-1]
         notes = "Accuracy is measured on deterministic SQL train/test splits."

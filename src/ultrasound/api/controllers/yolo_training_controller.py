@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.domain import AuthSessionRecord
 from ultrasound.api.models.schemas import (
     LiverDatasetStatusResponse,
@@ -40,6 +41,4 @@ def train_liver_yolo(
     try:
         return container.liver_yolo_training_service.train(request)
     except ServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-
-
+        raise_http_error(exc)

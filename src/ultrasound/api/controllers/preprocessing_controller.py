@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.schemas import PreprocessingPreviewResponse, PreprocessingRequest
+from ultrasound.api.services.service_errors import ServiceError
 
 router = APIRouter(
     tags=["preprocessing"],
@@ -22,7 +24,5 @@ def preview_preprocessing(
     """Run preprocessing methods and return images/metrics for UI rendering."""
     try:
         return container.preprocessing_service.preview(request)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)

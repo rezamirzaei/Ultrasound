@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.schemas import (
     BusiSamplePreview,
     BusiTrainingRequest,
@@ -23,6 +24,7 @@ from ultrasound.api.models.schemas import (
     NdtSampleSummary,
     NdtSignalPreview,
 )
+from ultrasound.api.services.service_errors import ServiceError
 
 router = APIRouter(
     tags=["dashboard"],
@@ -79,10 +81,8 @@ def get_industrial_sample_preview(
             class_name=class_name,
             sample_index=sample_index,
         )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 @router.get("/datasets/industrial/training/latest", response_model=IndustrialTrainingResponse)
@@ -105,8 +105,8 @@ def run_industrial_training(
     """Train industrial classifier from SQL-backed samples and persist run metrics."""
     try:
         return container.industrial_training_service.run_training(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 @router.get(
@@ -128,10 +128,8 @@ def get_industrial_segmentation_preview(
             class_name=class_name,
             sample_index=sample_index,
         )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 @router.get("/datasets/busi/training/latest", response_model=BusiTrainingResponse)
@@ -152,8 +150,8 @@ def run_busi_training(
     """Train a BUSI classifier from SQL-backed samples and persist run metrics."""
     try:
         return container.busi_training_service.run_training(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 @router.get("/datasets/busi/samples/{class_name}/{sample_index}", response_model=BusiSamplePreview)
@@ -165,8 +163,8 @@ def get_busi_sample_preview(
     """Return one BUSI sample and mask preview for UI exploration."""
     try:
         return container.dashboard_service.get_busi_sample_preview(class_name, sample_index)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 @router.get("/datasets/ndt/samples", response_model=list[NdtSampleSummary])
@@ -185,8 +183,8 @@ def get_ndt_sample(
     """Return one NDT sample detail for UI drill-down views."""
     try:
         return container.dashboard_service.get_ndt_sample_detail(sample_name)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 @router.get("/datasets/ndt/samples/{sample_name}/signal", response_model=NdtSignalPreview)
@@ -200,7 +198,5 @@ def get_ndt_sample_signal(
         return container.dashboard_service.get_ndt_signal_preview(
             sample_name, max_points=max_points
         )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)

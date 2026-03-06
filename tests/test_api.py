@@ -6,6 +6,7 @@ import time
 from collections.abc import Generator
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -14,6 +15,7 @@ from PIL import Image
 
 from ultrasound.api.app import create_app
 from ultrasound.api.config import AppConfig
+from ultrasound.api.services.yolo_trainer import YoloTrainingResult
 from ultrasound.data import create_sample_data
 
 
@@ -923,6 +925,52 @@ def test_busi_training_endpoints(client: TestClient) -> None:
     latest_after_payload = latest_after.json()
     assert latest_after_payload["run_id"] == run_payload["run_id"]
     assert latest_after_payload["curve"]
+
+
+def test_liver_yolo_training_endpoint_uses_stubbed_backend(client: TestClient) -> None:
+    class _TrainerStub:
+        def __init__(self, project_root: Path) -> None:
+            self.project_root = project_root
+
+        def train(self, config) -> YoloTrainingResult:  # noqa: ANN001
+            run_dir = self.project_root / "outputs" / "api" / "yolo_runs" / "liver_detection"
+            weights_dir = run_dir / "weights"
+            weights_dir.mkdir(parents=True, exist_ok=True)
+            best = weights_dir / "best.pt"
+            last = weights_dir / "last.pt"
+            best.write_bytes(b"best")
+            last.write_bytes(b"last")
+            return YoloTrainingResult(
+                best_weights=best,
+                last_weights=last,
+                metrics={"map50": 0.77},
+                epochs_completed=int(config.epochs),
+                run_dir=run_dir,
+            )
+
+    container = cast(Any, client.app).state.container
+    container.liver_yolo_training_service._trainer_factory = lambda: _TrainerStub(
+        container.config.project_root
+    )
+
+    analyst_headers = _auth_headers(client, username="analyst", password="analyst123")
+    response = client.post(
+        "/api/v1/yolo/liver/train",
+        json={
+            "use_synthetic": True,
+            "synthetic_samples": 10,
+            "epochs": 3,
+            "batch_size": 2,
+            "image_size": 320,
+        },
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["epochs_completed"] == 3
+    assert payload["metrics"]["map50"] == pytest.approx(0.77)
+    assert payload["best_weights"] is not None
 
 
 def test_preprocessing_preview_endpoint(client: TestClient) -> None:

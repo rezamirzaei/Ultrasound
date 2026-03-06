@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.schemas import (
     LiverSampleResponse,
     LiverYoloLabStatusResponse,
@@ -50,7 +51,7 @@ def get_liver_sample(
     try:
         return container.liver_yolo_lab_service.get_sample(category, sample_index)
     except ServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        raise_http_error(exc)
 
 
 @router.post(
@@ -67,4 +68,4 @@ def predict_liver_sample(
     try:
         return container.liver_yolo_lab_service.predict(category, sample_index, request)
     except ServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        raise_http_error(exc)

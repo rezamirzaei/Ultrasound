@@ -5,8 +5,11 @@ from __future__ import annotations
 from ultrasound.api.config import AppConfig
 from ultrasound.api.database.session import DatabaseSessionManager
 from ultrasound.api.repositories.auth_repository import AuthRepository
+from ultrasound.api.repositories.busi_repository import BusiRepository
 from ultrasound.api.repositories.dataset_repository import DatasetRepository
+from ultrasound.api.repositories.industrial_repository import IndustrialRepository
 from ultrasound.api.repositories.job_repository import JobRepository
+from ultrasound.api.repositories.ndt_repository import NdtRepository
 from ultrasound.api.services.auth_service import AuthService
 from ultrasound.api.services.busi_training_service import BusiTrainingService
 from ultrasound.api.services.busi_yolo_lab_service import BusiYoloLabService
@@ -36,7 +39,16 @@ class ApplicationContainer:
         self.db = DatabaseSessionManager(database_url)
 
         self.auth_repository = AuthRepository(self.db)
-        self.dataset_repository = DatasetRepository(self.config, self.db)
+        self.busi_repository = BusiRepository(self.config, self.db)
+        self.ndt_repository = NdtRepository(self.config, self.db)
+        self.industrial_repository = IndustrialRepository(self.config, self.db)
+        self.dataset_repository = DatasetRepository(
+            self.config,
+            self.db,
+            busi_repository=self.busi_repository,
+            ndt_repository=self.ndt_repository,
+            industrial_repository=self.industrial_repository,
+        )
         self.job_repository = JobRepository(self.db)
 
         self.observability_service = ObservabilityService()
@@ -52,25 +64,34 @@ class ApplicationContainer:
         self.liver_yolo_training_service = LiverYoloTrainingService(config=self.config)
         self.busi_yolo_lab_service = BusiYoloLabService(
             config=self.config,
-            dataset_repository=self.dataset_repository,
+            dataset_repository=self.busi_repository,
             media_service=self.media_service,
             yolo_service=self.yolo_service,
         )
         self.ndt_detection_service = NdtDetectionService()
         self.dashboard_service = DashboardService(
-            self.dataset_repository,
+            self.busi_repository,
+            self.ndt_repository,
+            self.industrial_repository,
             self.media_service,
             self.ndt_detection_service,
         )
-        self.data_ingestion_service = DataIngestionService(self.dataset_repository)
-        self.busi_training_service = BusiTrainingService(self.dataset_repository)
+        self.data_ingestion_service = DataIngestionService(
+            self.busi_repository,
+            self.ndt_repository,
+            self.industrial_repository,
+        )
+        self.busi_training_service = BusiTrainingService(self.busi_repository)
         self.industrial_training_service = IndustrialTrainingService(
-            self.dataset_repository,
+            self.industrial_repository,
             self.media_service,
         )
-        self.dataset_upload_service = DatasetUploadService(self.dataset_repository)
+        self.dataset_upload_service = DatasetUploadService(
+            self.busi_repository,
+            self.industrial_repository,
+        )
         self.preprocessing_service = PreprocessingService(
-            self.dataset_repository, self.media_service
+            self.busi_repository, self.media_service
         )
         self.job_queue_service = JobQueueService(
             repository=self.job_repository,

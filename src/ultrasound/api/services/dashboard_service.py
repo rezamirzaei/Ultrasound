@@ -22,10 +22,13 @@ from ultrasound.api.models.schemas import (
     NdtWallMarker,
 )
 from ultrasound.api.services.interfaces import (
-    DashboardDatasetRepository,
+    BusiDatasetRepository,
+    IndustrialSampleRepository,
     MediaRenderer,
     NdtDetectionAnalyzer,
+    NdtSampleRepository,
 )
+from ultrasound.api.services.service_errors import InvalidRequestError, NotFoundError
 
 
 class DashboardService:
@@ -33,18 +36,57 @@ class DashboardService:
 
     def __init__(
         self,
-        dataset_repository: DashboardDatasetRepository,
+        busi_repository: BusiDatasetRepository,
+        ndt_repository: NdtSampleRepository,
+        industrial_repository: IndustrialSampleRepository,
         media_service: MediaRenderer,
         ndt_detection_service: NdtDetectionAnalyzer,
-    ):
-        self.dataset_repository = dataset_repository
+    ) -> None:
+        self.busi_repository = busi_repository
+        self.ndt_repository = ndt_repository
+        self.industrial_repository = industrial_repository
         self.media_service = media_service
         self.ndt_detection_service = ndt_detection_service
 
+    def _load_busi_sample(self, class_name: str, sample_index: int):
+        try:
+            return self.busi_repository.get_busi_sample(class_name=class_name, index=sample_index)
+        except FileNotFoundError as exc:
+            raise NotFoundError(str(exc)) from exc
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    def _load_industrial_sample(
+        self,
+        dataset_name: str,
+        split: str,
+        class_name: str,
+        sample_index: int,
+    ):
+        try:
+            return self.industrial_repository.get_industrial_sample(
+                dataset_name=dataset_name,
+                split=split,
+                class_name=class_name,
+                index=sample_index,
+            )
+        except FileNotFoundError as exc:
+            raise NotFoundError(str(exc)) from exc
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    def _load_ndt_sample(self, sample_name: str):
+        try:
+            return self.ndt_repository.load_ndt_sample(sample_name)
+        except FileNotFoundError as exc:
+            raise NotFoundError(str(exc)) from exc
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
     def get_summary(self) -> DashboardSummaryResponse:
-        busi_counts = self.dataset_repository.get_busi_counts()
-        ndt_samples = self.dataset_repository.list_ndt_samples()
-        industrial_counts = self.dataset_repository.get_industrial_counts()
+        busi_counts = self.busi_repository.get_busi_counts()
+        ndt_samples = self.ndt_repository.list_ndt_samples()
+        industrial_counts = self.industrial_repository.get_industrial_counts()
         industrial_totals = {
             dataset_name: int(
                 sum(
@@ -65,9 +107,9 @@ class DashboardService:
         )
 
     def get_data_readiness(self) -> DataReadinessResponse:
-        busi_counts = self.dataset_repository.get_busi_counts()
-        ndt_samples = self.dataset_repository.list_ndt_samples()
-        industrial_counts = self.dataset_repository.get_industrial_counts()
+        busi_counts = self.busi_repository.get_busi_counts()
+        ndt_samples = self.ndt_repository.list_ndt_samples()
+        industrial_counts = self.industrial_repository.get_industrial_counts()
 
         busi_available_classes = [name for name, count in busi_counts.items() if count > 0]
         busi_missing_classes = [name for name, count in busi_counts.items() if count <= 0]
@@ -116,13 +158,10 @@ class DashboardService:
         )
 
     def get_busi_counts(self) -> dict[str, int]:
-        return self.dataset_repository.get_busi_counts()
+        return self.busi_repository.get_busi_counts()
 
     def get_busi_sample_preview(self, class_name: str, sample_index: int) -> BusiSamplePreview:
-        sample = self.dataset_repository.get_busi_sample(
-            class_name=class_name,
-            index=sample_index,
-        )
+        sample = self._load_busi_sample(class_name=class_name, sample_index=sample_index)
         mask_binary = np.asarray(sample.mask > 0, dtype=np.uint8) * 255
 
         lesion_pixels = int(np.count_nonzero(mask_binary))
@@ -141,7 +180,7 @@ class DashboardService:
         )
 
     def get_industrial_summary(self) -> IndustrialDatasetSummaryResponse:
-        counts = self.dataset_repository.get_industrial_counts()
+        counts = self.industrial_repository.get_industrial_counts()
         rows: list[IndustrialDatasetRow] = []
         totals_by_dataset: dict[str, int] = {}
         for dataset_name, split_map in sorted(counts.items()):
@@ -174,11 +213,11 @@ class DashboardService:
         class_name: str,
         sample_index: int,
     ) -> IndustrialSamplePreview:
-        sample = self.dataset_repository.get_industrial_sample(
+        sample = self._load_industrial_sample(
             dataset_name=dataset_name,
             split=split,
             class_name=class_name,
-            index=sample_index,
+            sample_index=sample_index,
         )
         return IndustrialSamplePreview(
             dataset_name=sample.dataset_name,
@@ -195,8 +234,8 @@ class DashboardService:
 
     def list_ndt_samples(self) -> list[NdtSampleSummary]:
         summaries: list[NdtSampleSummary] = []
-        for sample_name in self.dataset_repository.list_ndt_samples():
-            sample = self.dataset_repository.load_ndt_sample(sample_name)
+        for sample_name in self.ndt_repository.list_ndt_samples():
+            sample = self._load_ndt_sample(sample_name)
             resolved_defects = self.ndt_detection_service.resolve_defects(sample)
             summaries.append(
                 NdtSampleSummary(
@@ -213,7 +252,7 @@ class DashboardService:
         return summaries
 
     def get_ndt_signal_preview(self, sample_name: str, max_points: int = 1024) -> NdtSignalPreview:
-        sample = self.dataset_repository.load_ndt_sample(sample_name)
+        sample = self._load_ndt_sample(sample_name)
         signal_analysis = self.ndt_detection_service.analyze_signal(sample)
         resolved_defects = self.ndt_detection_service.resolve_defects(
             sample,
@@ -224,7 +263,7 @@ class DashboardService:
 
         n_original = int(rf.size)
         if n_original == 0:
-            raise ValueError(f"NDT sample '{sample_name}' contains no RF points.")
+            raise InvalidRequestError(f"NDT sample '{sample_name}' contains no RF points.")
 
         n_target = max(1, min(int(max_points), n_original))
         if n_target < n_original:
@@ -315,7 +354,7 @@ class DashboardService:
         )
 
     def get_ndt_sample_detail(self, sample_name: str) -> NdtSampleDetail:
-        sample = self.dataset_repository.load_ndt_sample(sample_name)
+        sample = self._load_ndt_sample(sample_name)
         resolved_defects = self.ndt_detection_service.resolve_defects(sample)
         return NdtSampleDetail(
             name=sample.name,

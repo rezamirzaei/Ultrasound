@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.domain import AuthSessionRecord, JobRunRecord
 from ultrasound.api.models.schemas import (
     BusiTrainingRequest,
@@ -17,6 +18,7 @@ from ultrasound.api.models.schemas import (
     JobEnqueueResponse,
     JobRunResponse,
 )
+from ultrasound.api.services.service_errors import NotFoundError, ServiceError
 
 router = APIRouter(tags=["mlops"])
 
@@ -112,7 +114,7 @@ def get_learning_job(
     """Get one background job by id."""
     job = container.job_queue_service.get_job(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        raise_http_error(NotFoundError(f"Job {job_id} not found"))
     return _to_job_response(job)
 
 
@@ -137,8 +139,8 @@ async def upload_busi_sample(
             image_blob=image_blob,
             mask_blob=mask_blob,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
     return BusiUploadResponse(
         sample_id=record.sample_id,
@@ -174,8 +176,8 @@ async def upload_industrial_sample(
             image_blob=image_blob,
             annotation_blob=annotation_blob,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
     return IndustrialUploadResponse(
         sample_id=record.sample_id,

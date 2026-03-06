@@ -69,7 +69,7 @@ jobs:
         run: python -m mypy ./
 
       - name: Run tests with coverage
-        run: pytest tests/ -v --tb=short --cov=src/ultrasound --cov-report=term-missing --cov-fail-under=40
+        run: pytest tests/ -v --tb=short --cov=src/ultrasound --cov-report=term-missing --cov-fail-under=75
 
   # ── Build sdist / wheel ─────────────────────────────────────────────
   package:

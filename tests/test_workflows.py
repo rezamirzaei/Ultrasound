@@ -3,8 +3,18 @@
 from __future__ import annotations
 
 import numpy as np
+import torch
+from torch.utils.data import DataLoader, TensorDataset
 
-from ultrasound.workflows import run_model_metric_smoke, run_preprocessing_workbench
+from ultrasound.workflows import (
+    run_dataset_healthcheck,
+    run_masked_proximal_decomposition,
+    run_mini_training_pipeline,
+    run_model_metric_smoke,
+    run_ndt_ascan_analysis,
+    run_phase_retrieval_ultrasound,
+    run_preprocessing_workbench,
+)
 
 
 def _sample_image() -> np.ndarray:
@@ -41,3 +51,86 @@ def test_run_model_metric_smoke_returns_numeric_summaries() -> None:
     assert result.segmentation_metrics["iou"] >= 0.0
     assert result.confusion_matrix.shape == (2, 2)
     assert "accuracy" in result.classification_metrics
+
+
+def test_run_dataset_healthcheck_builds_overlays_and_status() -> None:
+    ndt_rows = [{"sample": "demo.npz", "n_defects": 2}]
+
+    result = run_dataset_healthcheck(
+        {"benign": 3, "malignant": 2, "normal": 0},
+        {
+            "benign": (_sample_image(), _sample_mask()),
+            "malignant": (_sample_image(), _sample_mask()),
+        },
+        ndt_rows,
+        seed=9,
+    )
+
+    assert result.health_status["busi_ready"] is True
+    assert result.health_status["ndt_ready"] is True
+    assert result.health_status["overall_ready"] is True
+    assert result.report["seed"] == 9
+    assert set(result.overlays) == {"benign", "malignant"}
+    for overlay in result.overlays.values():
+        assert overlay.shape == _sample_image().shape
+
+
+def test_run_mini_training_pipeline_executes_two_step_smoke_loop() -> None:
+    torch.manual_seed(5)
+    images = torch.rand(4, 3, 96, 96)
+    masks = (torch.rand(4, 1, 96, 96) > 0.5).float()
+    labels = torch.tensor([0, 1, 0, 1], dtype=torch.long)
+    loader = DataLoader(TensorDataset(images, masks, labels), batch_size=2, shuffle=False)
+
+    result = run_mini_training_pipeline(loader, seed=5, steps=2, device="cpu")
+
+    assert len(result.segmentation_losses) == 2
+    assert len(result.classification_losses) == 2
+    assert result.status["overall_pass"] is True
+
+
+def test_run_ndt_ascan_analysis_detects_echoes() -> None:
+    n = 256
+    fs_hz = 20e6
+    time_s = np.arange(n, dtype=np.float64) / fs_hz
+    rf = np.zeros(n, dtype=np.float64)
+    rf[20] = 1.0
+    rf[80] = 0.8
+    rf[140] = 0.4
+
+    result = run_ndt_ascan_analysis(
+        rf,
+        time_s,
+        fs_hz=fs_hz,
+        fc_hz=5e6,
+        c_mps=5900.0,
+        nominal_thickness_m=0.01,
+    )
+
+    assert result.peak_indices.size >= 2
+    assert len(result.peak_times_us) >= 2
+    assert result.status["overall_pass"] is True
+
+
+def test_run_phase_retrieval_ultrasound_improves_initialization() -> None:
+    x = np.linspace(0.0, 4.0 * np.pi, 128, dtype=np.float64)
+    rf = np.sin(x) + 0.2 * np.sin(3.0 * x)
+
+    result = run_phase_retrieval_ultrasound(rf, seed=4, measurement_ratio=5, n_iter=80)
+
+    assert result.status["error_reduced"] is True
+    assert result.measured_amplitude.shape == result.reconstructed_amplitude.shape
+    assert result.amplitude_rmse
+
+
+def test_run_masked_proximal_decomposition_beats_zero_fill_baseline() -> None:
+    x = np.linspace(0.0, 2.0 * np.pi, 256, dtype=np.float64)
+    signal = np.sin(x)
+    signal[80] += 0.8
+    signal[160] -= 0.6
+
+    result = run_masked_proximal_decomposition(signal, seed=3, n_iter=40)
+
+    assert result.status["improves_over_baseline"] is True
+    assert result.status["objective_decreases"] is True
+    assert len(result.objective_history) == 40

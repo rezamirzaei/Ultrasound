@@ -11,6 +11,7 @@ from typing import Literal, cast
 
 from ultrasound.api.models.domain import AuthSessionRecord
 from ultrasound.api.repositories.auth_repository import AuthRepository
+from ultrasound.api.services.service_errors import InvalidRequestError, UnauthorizedError
 
 
 class AuthService:
@@ -36,7 +37,7 @@ class AuthService:
     def _normalize_role(self, value: str) -> Literal["viewer", "analyst", "admin"]:
         role = value.strip().lower()
         if role not in self.ROLE_ORDER:
-            raise ValueError("Invalid role")
+            raise InvalidRequestError("Invalid role")
         return cast(Literal["viewer", "analyst", "admin"], role)
 
     def _hash_password(self, password: str) -> str:
@@ -97,9 +98,9 @@ class AuthService:
         normalized = username.strip().lower()
         user = self.repository.get_user_by_username(normalized)
         if user is None or not bool(user.is_active):
-            raise ValueError("Invalid credentials")
+            raise UnauthorizedError("Invalid credentials")
         if not self._verify_password(password, str(user.password_hash)):
-            raise ValueError("Invalid credentials")
+            raise UnauthorizedError("Invalid credentials")
 
         expires_at = datetime.now(tz=timezone.utc) + timedelta(minutes=self.token_ttl_minutes)
         return AuthSessionRecord(
@@ -111,9 +112,9 @@ class AuthService:
     def issue_token(self, session: AuthSessionRecord) -> str:
         user = self.repository.get_user_by_username(session.username.strip().lower())
         if user is None or not bool(user.is_active):
-            raise ValueError("Invalid user")
+            raise UnauthorizedError("Invalid user")
         if user.id is None:
-            raise ValueError("Invalid user id")
+            raise UnauthorizedError("Invalid user id")
 
         token = secrets.token_urlsafe(48)
         self.repository.issue_token(
@@ -127,24 +128,24 @@ class AuthService:
     def verify_token(self, token: str) -> AuthSessionRecord:
         token = token.strip()
         if not token:
-            raise ValueError("Invalid token")
+            raise UnauthorizedError("Invalid token")
 
         lookup = self.repository.get_token_with_user(self._token_hash(token))
         if lookup is None:
-            raise ValueError("Invalid token")
+            raise UnauthorizedError("Invalid token")
 
         token_row, user = lookup
         now = datetime.now(tz=timezone.utc)
 
         expires_at = self._to_utc(token_row.expires_at)
         if token_row.revoked_at is not None:
-            raise ValueError("Token revoked")
+            raise UnauthorizedError("Token revoked")
         if expires_at <= now:
-            raise ValueError("Token expired")
+            raise UnauthorizedError("Token expired")
         if not bool(user.is_active):
-            raise ValueError("User is inactive")
+            raise UnauthorizedError("User is inactive")
         if user.id is None or token_row.id is None:
-            raise ValueError("Invalid token state")
+            raise UnauthorizedError("Invalid token state")
 
         self.repository.touch_token(int(token_row.id))
         return AuthSessionRecord(

@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import bearer_scheme, get_container, get_current_user
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.domain import AuthSessionRecord
 from ultrasound.api.models.schemas import (
     AuthMeResponse,
@@ -14,6 +15,7 @@ from ultrasound.api.models.schemas import (
     LoginResponse,
     LogoutResponse,
 )
+from ultrasound.api.services.service_errors import ServiceError
 
 router = APIRouter(tags=["auth"])
 
@@ -26,11 +28,8 @@ def login(
     """Authenticate user credentials and issue bearer token."""
     try:
         session = container.auth_service.authenticate(request.username, request.password)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
     return LoginResponse(
         access_token=container.auth_service.issue_token(session),

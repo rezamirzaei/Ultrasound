@@ -8,7 +8,9 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ultrasound.api.container import ApplicationContainer
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.domain import AuthSessionRecord
+from ultrasound.api.services.service_errors import ForbiddenError, ServiceError
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -34,11 +36,8 @@ def get_current_user(
 
     try:
         return container.auth_service.verify_token(credentials.credentials)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
+    except ServiceError as exc:
+        raise_http_error(exc)
 
 
 def require_role(
@@ -51,10 +50,7 @@ def require_role(
         container: ApplicationContainer = Depends(get_container),
     ) -> AuthSessionRecord:
         if not container.auth_service.has_role(current_user.role, min_role):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{min_role}' or higher is required",
-            )
+            raise_http_error(ForbiddenError(f"Role '{min_role}' or higher is required"))
         return current_user
 
     return dependency

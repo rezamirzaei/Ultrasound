@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ultrasound.api.container import ApplicationContainer
 from ultrasound.api.controllers.dependencies import get_container, require_role
+from ultrasound.api.controllers.error_mapping import raise_http_error
 from ultrasound.api.models.domain import AuthSessionRecord
 from ultrasound.api.models.schemas import (
     BusiYoloLabStatusResponse,
@@ -58,7 +59,7 @@ def get_busi_yolo_sample(
     try:
         return container.busi_yolo_lab_service.get_sample(class_name, sample_index)
     except ServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        raise_http_error(exc)
 
 
 @router.post(
@@ -75,4 +76,4 @@ def predict_busi_yolo_sample(
     try:
         return container.busi_yolo_lab_service.predict(class_name, sample_index, request)
     except ServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        raise_http_error(exc)

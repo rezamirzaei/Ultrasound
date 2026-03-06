@@ -24,6 +24,7 @@ from ultrasound.api.models.schemas import (
     IndustrialTrainingResponse,
 )
 from ultrasound.api.services.interfaces import IndustrialTrainingRepository, MediaRenderer
+from ultrasound.api.services.service_errors import InvalidRequestError, NotFoundError
 
 
 class IndustrialTrainingService:
@@ -32,6 +33,13 @@ class IndustrialTrainingService:
     def __init__(self, dataset_repository: IndustrialTrainingRepository, media_service: MediaRenderer):
         self.dataset_repository = dataset_repository
         self.media_service = media_service
+
+    def _map_repository_error(self, exc: Exception) -> Exception:
+        if isinstance(exc, FileNotFoundError):
+            return NotFoundError(str(exc))
+        if isinstance(exc, ValueError):
+            return InvalidRequestError(str(exc))
+        return exc
 
     def _resolve_task_profile(
         self,
@@ -129,18 +137,18 @@ class IndustrialTrainingService:
         train_samples = [sample for sample in samples if sample.split == "train"]
         test_samples = [sample for sample in samples if sample.split == "test"]
         if not train_samples or not test_samples:
-            raise ValueError(
+            raise InvalidRequestError(
                 f"Dataset '{dataset_name}' must provide both train and test samples for learning."
             )
 
         train_labels = sorted({sample.label for sample in train_samples})
         test_labels = sorted({sample.label for sample in test_samples})
         if len(train_labels) < 2:
-            raise ValueError(
+            raise InvalidRequestError(
                 f"Dataset '{dataset_name}' needs at least two classes in train split for learning."
             )
         if not set(test_labels).issubset(set(train_labels)):
-            raise ValueError(
+            raise InvalidRequestError(
                 "Industrial train split does not cover all classes present in test split."
             )
 
@@ -363,17 +371,20 @@ class IndustrialTrainingService:
         )
 
     def get_latest_run(self, dataset_name: str) -> IndustrialTrainingResponse:
-        latest = self.dataset_repository.get_latest_industrial_training_run(dataset_name)
+        try:
+            latest = self.dataset_repository.get_latest_industrial_training_run(dataset_name)
+            counts = self.dataset_repository.get_industrial_counts().get(dataset_name, {})
+            annotation_count = self.dataset_repository.get_industrial_annotation_count(dataset_name)
+        except (FileNotFoundError, ValueError) as exc:
+            raise self._map_repository_error(exc) from exc
         if latest is not None:
             return self._to_response(latest)
 
-        counts = self.dataset_repository.get_industrial_counts().get(dataset_name, {})
         class_counts: dict[str, int] = {}
         for class_map in counts.values():
             for class_name, n in class_map.items():
                 class_counts[class_name] = int(class_counts.get(class_name, 0) + int(n))
         class_labels = sorted(class_counts.keys())
-        annotation_count = self.dataset_repository.get_industrial_annotation_count(dataset_name)
         (
             task_type,
             classification_mode,
@@ -441,7 +452,7 @@ class IndustrialTrainingService:
             learning_rate=request.learning_rate,
         )
         if not curve:
-            raise ValueError("Industrial training produced no curve points.")
+            raise InvalidRequestError("Industrial training produced no curve points.")
 
         has_annotation_blob = any(
             sample.annotation_blob is not None for sample in train_samples
@@ -511,14 +522,17 @@ class IndustrialTrainingService:
         class_name: str,
         sample_index: int,
     ) -> IndustrialSegmentationPreview:
-        sample = self.dataset_repository.get_industrial_sample(
-            dataset_name=dataset_name,
-            split=split,
-            class_name=class_name,
-            index=sample_index,
-        )
-        annotation_count = self.dataset_repository.get_industrial_annotation_count(dataset_name)
-        class_counts = self.dataset_repository.get_industrial_counts().get(dataset_name, {})
+        try:
+            sample = self.dataset_repository.get_industrial_sample(
+                dataset_name=dataset_name,
+                split=split,
+                class_name=class_name,
+                index=sample_index,
+            )
+            annotation_count = self.dataset_repository.get_industrial_annotation_count(dataset_name)
+            class_counts = self.dataset_repository.get_industrial_counts().get(dataset_name, {})
+        except (FileNotFoundError, ValueError) as exc:
+            raise self._map_repository_error(exc) from exc
         class_labels = sorted(
             {class_name_key for split_map in class_counts.values() for class_name_key in split_map}
         )

@@ -13,6 +13,7 @@ from ultrasound.api.models.schemas import (
     PreprocessingRequest,
 )
 from ultrasound.api.services.interfaces import BusiSampleRepository, MediaRenderer
+from ultrasound.api.services.service_errors import InvalidRequestError, NotFoundError
 from ultrasound.preprocessing.denoising import admm_tv_denoising
 from ultrasound.preprocessing.enhancement import ContrastEnhancer
 from ultrasound.preprocessing.speckle import SpeckleReducer
@@ -40,10 +41,15 @@ class PreprocessingService:
         )
 
     def preview(self, request: PreprocessingRequest) -> PreprocessingPreviewResponse:
-        sample = self.dataset_repository.get_busi_sample(
-            class_name=request.class_name,
-            index=request.sample_index,
-        )
+        try:
+            sample = self.dataset_repository.get_busi_sample(
+                class_name=request.class_name,
+                index=request.sample_index,
+            )
+        except FileNotFoundError as exc:
+            raise NotFoundError(str(exc)) from exc
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
         image_rgb = sample.image_rgb
         gray = np.mean(image_rgb, axis=2).astype(np.uint8)
 
