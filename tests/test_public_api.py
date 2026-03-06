@@ -67,6 +67,21 @@ def test_api_package_resolves_lazy_create_app(monkeypatch) -> None:
     assert "create_app" in dir(api_pkg)
 
 
+def test_api_package_resolves_lazy_app(monkeypatch) -> None:
+    api_pkg = importlib.reload(importlib.import_module("ultrasound.api"))
+    api_app = importlib.import_module("ultrasound.api.app")
+    sentinel = object()
+
+    monkeypatch.setattr(api_app, "app", sentinel, raising=False)
+    api_pkg.__dict__.pop("app", None)
+
+    assert api_pkg.app is sentinel
+    assert api_pkg.app is sentinel
+    exported = dir(api_pkg)
+    assert "app" in exported
+    assert "create_app" in exported
+
+
 def test_api_package_invalid_attribute_raises() -> None:
     api_pkg = importlib.reload(importlib.import_module("ultrasound.api"))
 

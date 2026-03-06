@@ -21,6 +21,13 @@ from ultrasound.api.repositories.dataset_support import DatasetRepositorySupport
 class BusiRepository(DatasetRepositorySupport):
     """Persist and read BUSI samples, uploads, and training runs."""
 
+    @classmethod
+    def _normalize_class_name(cls, class_name: str) -> Literal["benign", "malignant", "normal"]:
+        normalized = class_name.strip().lower()
+        if normalized not in cls.CLASSES:
+            raise ValueError(f"Invalid BUSI class '{class_name}'. Expected one of {cls.CLASSES}.")
+        return cast(Literal["benign", "malignant", "normal"], normalized)
+
     def sync_busi_from_filesystem(self) -> int:
         fingerprint = self._compute_busi_fingerprint()
         if self._meta_get("busi_fingerprint") == fingerprint:
@@ -75,37 +82,46 @@ class BusiRepository(DatasetRepositorySupport):
         return counts
 
     def get_busi_sample(self, class_name: str, index: int = 0) -> BusiSampleRecord:
-        if class_name not in self.CLASSES:
-            raise FileNotFoundError(f"BUSI class '{class_name}' not found. Available classes: {self.CLASSES}")
+        try:
+            normalized_class = self._normalize_class_name(class_name)
+        except ValueError as exc:
+            raise FileNotFoundError(f"BUSI class '{class_name}' not found. Available classes: {self.CLASSES}") from exc
         if index < 0:
             raise ValueError("sample index must be >= 0")
 
         with self.db.session_scope() as session:
             total_samples = int(
-                session.scalar(select(func.count(BusiSampleORM.id)).where(BusiSampleORM.class_name == class_name)) or 0
+                session.scalar(
+                    select(func.count(BusiSampleORM.id)).where(BusiSampleORM.class_name == normalized_class)
+                )
+                or 0
             )
             if total_samples <= 0:
-                raise FileNotFoundError(f"No BUSI images found for class '{class_name}' in database storage.")
+                raise FileNotFoundError(
+                    f"No BUSI images found for class '{normalized_class}' in database storage."
+                )
             resolved_index = int(index % total_samples)
             sample = session.scalars(
                 select(BusiSampleORM)
-                .where(BusiSampleORM.class_name == class_name)
+                .where(BusiSampleORM.class_name == normalized_class)
                 .order_by(BusiSampleORM.image_filename)
                 .offset(resolved_index)
                 .limit(1)
             ).first()
 
         if sample is None:
-            raise FileNotFoundError(f"Could not fetch BUSI sample for class '{class_name}' at index {index}.")
+            raise FileNotFoundError(
+                f"Could not fetch BUSI sample for class '{normalized_class}' at index {index}."
+            )
 
         image_rgb = self._decode_rgb_blob(sample.image_blob)
         mask = self._decode_mask_blob(sample.mask_blob, shape=(int(image_rgb.shape[0]), int(image_rgb.shape[1])))
         return BusiSampleRecord(
-            class_name=class_name,
+            class_name=normalized_class,
             requested_index=int(index),
             resolved_index=resolved_index,
             total_samples=total_samples,
-            image_path=self.config.busi_dir / class_name / sample.image_filename,
+            image_path=self.config.busi_dir / normalized_class / sample.image_filename,
             image_rgb=image_rgb,
             mask=mask,
         )
@@ -118,9 +134,7 @@ class BusiRepository(DatasetRepositorySupport):
         image_blob: bytes,
         mask_blob: bytes | None = None,
     ) -> BusiUploadRecord:
-        normalized_class = class_name.strip().lower()
-        if normalized_class not in self.CLASSES:
-            raise ValueError(f"Invalid BUSI class '{class_name}'. Expected one of {self.CLASSES}.")
+        normalized_class = self._normalize_class_name(class_name)
         normalized_split = split.strip().lower()
         if normalized_split not in {"train", "test"}:
             raise ValueError("BUSI split must be 'train' or 'test'.")
@@ -188,7 +202,7 @@ class BusiRepository(DatasetRepositorySupport):
 
         samples: list[BusiTrainingSampleRecord] = []
         for row in rows:
-            if row.class_name not in self.CLASSES or row.split not in {"train", "test"}:
+            if row.id is None or row.class_name not in self.CLASSES or row.split not in {"train", "test"}:
                 continue
             samples.append(
                 BusiTrainingSampleRecord(
@@ -218,16 +232,15 @@ class BusiRepository(DatasetRepositorySupport):
 
     def get_latest_busi_training_run(self, include_normal: bool = False) -> BusiTrainingRunRecord | None:
         with self.db.session_scope() as session:
-            row = session.scalars(
+            rows = session.scalars(
                 select(BusiTrainingRunORM)
                 .where(BusiTrainingRunORM.include_normal == include_normal)
                 .order_by(BusiTrainingRunORM.id.desc())
-                .limit(1)
-            ).first()
-        if row is None:
-            return None
-        try:
-            parsed = BusiTrainingRunRecord.model_validate_json(row.payload_json)
-        except Exception:
-            return None
-        return parsed.model_copy(update={"run_id": int(row.id)})
+            ).all()
+        for row in rows:
+            try:
+                parsed = BusiTrainingRunRecord.model_validate_json(row.payload_json)
+            except Exception:
+                continue
+            return parsed.model_copy(update={"run_id": int(row.id)})
+        return None
