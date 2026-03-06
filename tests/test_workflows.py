@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
+from tests._picmus_fixtures import create_picmus_fixture
 from ultrasound.workflows import (
     run_dataset_healthcheck,
     run_masked_proximal_decomposition,
     run_mini_training_pipeline,
     run_model_metric_smoke,
     run_ndt_ascan_analysis,
+    run_phase_retrieval_picmus,
     run_phase_retrieval_ultrasound,
     run_preprocessing_workbench,
+    tune_phase_retrieval_picmus,
 )
 
 
@@ -116,11 +121,48 @@ def test_run_phase_retrieval_ultrasound_improves_initialization() -> None:
     x = np.linspace(0.0, 4.0 * np.pi, 128, dtype=np.float64)
     rf = np.sin(x) + 0.2 * np.sin(3.0 * x)
 
-    result = run_phase_retrieval_ultrasound(rf, seed=4, measurement_ratio=5, n_iter=80)
+    result = run_phase_retrieval_ultrasound(rf, seed=4, measurement_ratio=5, n_iter=150)
 
     assert result.status["error_reduced"] is True
+    assert result.report["final_relative_error"] < 0.25
     assert result.measured_amplitude.shape == result.reconstructed_amplitude.shape
     assert result.amplitude_rmse
+
+
+def test_run_phase_retrieval_picmus_uses_real_rf_fixture(tmp_path: Path) -> None:
+    create_picmus_fixture(tmp_path)
+
+    result = run_phase_retrieval_picmus(
+        root_dir=str(tmp_path / "picmus"),
+        case_name="carotid_long",
+        segment_length=96,
+        measurement_ratio=5,
+        n_iter=150,
+        seed=7,
+    )
+
+    assert result.signal_metadata is not None
+    assert result.signal_metadata["case_name"] == "carotid_long"
+    assert result.report["final_relative_error"] < 0.25
+    assert result.status["overall_pass"] is True
+
+
+def test_tune_phase_retrieval_picmus_returns_best_config(tmp_path: Path) -> None:
+    create_picmus_fixture(tmp_path)
+
+    tuning = tune_phase_retrieval_picmus(
+        root_dir=str(tmp_path / "picmus"),
+        cases=["carotid_cross", "carotid_long"],
+        segment_lengths=(96,),
+        measurement_ratios=(4, 5, 6),
+        iteration_grid=(150,),
+        seed=11,
+    )
+
+    assert tuning.best_config["segment_length"] == 96
+    assert tuning.best_config["measurement_ratio"] in {4, 5, 6}
+    assert tuning.ranked_results
+    assert tuning.cases == ["carotid_cross", "carotid_long"]
 
 
 def test_run_masked_proximal_decomposition_beats_zero_fill_baseline() -> None:

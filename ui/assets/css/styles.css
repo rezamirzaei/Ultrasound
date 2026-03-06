@@ -453,6 +453,14 @@ select {
   fill: none;
 }
 
+.signal-line-secondary {
+  stroke: var(--accent-2);
+}
+
+.signal-line-accent {
+  stroke: #9ee7ff;
+}
+
 .signal-marker {
   stroke: rgba(255, 183, 3, 0.55);
   stroke-width: 1;

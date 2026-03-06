@@ -12,6 +12,7 @@ from .liver_yolo_training_service import LiverYoloTrainingService
 from .media_service import MediaService
 from .ndt_detection_service import NdtDetectionService
 from .observability_service import ObservabilityService
+from .phase_retrieval_service import PhaseRetrievalService
 from .preprocessing_service import PreprocessingService
 from .yolo_trainer import YoloDatasetPreparer, YoloTrainer, YoloTrainingConfig
 
@@ -28,6 +29,7 @@ __all__ = [
     "MediaService",
     "NdtDetectionService",
     "ObservabilityService",
+    "PhaseRetrievalService",
     "PreprocessingService",
     "YoloDatasetPreparer",
     "YoloTrainer",

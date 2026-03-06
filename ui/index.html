@@ -79,6 +79,11 @@
           >Preprocessing Lab</a>
           <a
             href=""
+            ng-click="main.navigate('/phase-retrieval', true, null, $event)"
+            ng-class="{active: main.isActive('/phase-retrieval'), disabled: !main.authenticated}"
+          >Phase Retrieval Lab</a>
+          <a
+            href=""
             ng-click="main.navigate('/ndt', true, null, $event)"
             ng-class="{active: main.isActive('/ndt'), disabled: !main.authenticated}"
           >NDT Explorer</a>
@@ -116,6 +121,7 @@
     <script src="app/controllers/yolo.controller.js"></script>
     <script src="app/controllers/yolo_ultrasound.controller.js"></script>
     <script src="app/controllers/preprocessing.controller.js"></script>
+    <script src="app/controllers/phase_retrieval.controller.js"></script>
     <script src="app/controllers/ndt.controller.js"></script>
   </body>
 </html>

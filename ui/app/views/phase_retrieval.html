@@ -1,0 +1,123 @@
+<section class="panel" ng-if="vm.loading">
+  <p>Loading phase retrieval lab...</p>
+</section>
+
+<section class="panel error" ng-if="vm.error">
+  <p>{{ vm.error }}</p>
+</section>
+
+<section class="panel" ng-if="!vm.loading && vm.status">
+  <h3>Phase Retrieval Lab</h3>
+  <p class="note">
+    Run tuned amplitude-only phase retrieval on real PICMUS in-vivo carotid ultrasound RF data.
+    The workflow auto-selects the highest-energy RF window in each case and reconstructs the analytic signal.
+  </p>
+</section>
+
+<section class="panel" ng-if="!vm.loading && vm.status">
+  <h3>Dataset Status</h3>
+  <ul class="list compact">
+    <li><span>Dataset Available</span><strong>{{ vm.status.dataset_available ? 'Yes' : 'No' }}</strong></li>
+    <li><span>Dataset Root</span><strong>{{ vm.status.dataset_root }}</strong></li>
+    <li><span>Cases</span><strong>{{ (vm.status.available_cases || []).join(', ') || 'none' }}</strong></li>
+    <li><span>Recommended Solver</span><strong>{{ vm.status.recommended_solver }}</strong></li>
+    <li><span>Recommended Segment</span><strong>{{ vm.status.recommended_segment_length }} samples</strong></li>
+    <li><span>Recommended Ratio</span><strong>{{ vm.status.recommended_measurement_ratio }}x</strong></li>
+  </ul>
+  <p class="note">
+    Source: <code>{{ vm.status.source_url }}</code>
+  </p>
+  <p class="note" ng-if="!vm.status.dataset_available">
+    Download the dataset with <code>python scripts/download_picmus_in_vivo.py</code>.
+  </p>
+</section>
+
+<section class="panel" ng-if="!vm.loading && vm.status && vm.status.dataset_available">
+  <h3>Run Preview</h3>
+  <form class="form-grid" ng-submit="vm.run()">
+    <label>
+      PICMUS Case
+      <select ng-model="vm.form.case_name">
+        <option ng-repeat="caseName in vm.status.available_cases" value="{{ caseName }}">{{ caseName }}</option>
+      </select>
+    </label>
+    <label>
+      Segment Length
+      <input type="number" min="32" max="256" step="16" ng-model="vm.form.segment_length" />
+    </label>
+    <label>
+      Measurement Ratio
+      <input type="number" min="1" max="12" step="1" ng-model="vm.form.measurement_ratio" />
+    </label>
+    <label>
+      Max Iterations
+      <input type="number" min="10" max="1000" step="10" ng-model="vm.form.max_iterations" />
+    </label>
+    <label>
+      Seed
+      <input type="number" min="0" step="1" ng-model="vm.form.seed" />
+    </label>
+    <div class="form-actions">
+      <button class="btn" type="submit" ng-disabled="vm.running">
+        {{ vm.running ? 'Running...' : 'Run Preview' }}
+      </button>
+    </div>
+  </form>
+  <p class="note signal-error" ng-if="vm.previewError">{{ vm.previewError }}</p>
+</section>
+
+<section class="grid-2" ng-if="vm.preview">
+  <div class="panel">
+    <h3>Recovery Summary</h3>
+    <ul class="list compact">
+      <li><span>Case</span><strong>{{ vm.preview.case_name }}</strong></li>
+      <li><span>Angle / Element</span><strong>{{ vm.preview.angle_index }} / {{ vm.preview.element_index }}</strong></li>
+      <li><span>Window Start</span><strong>{{ vm.preview.start_index }}</strong></li>
+      <li><span>Segment Energy</span><strong>{{ vm.preview.energy | number:4 }}</strong></li>
+      <li><span>Sampling Frequency</span><strong>{{ vm.preview.sampling_frequency_hz / 1000000 | number:2 }} MHz</strong></li>
+      <li><span>Sound Speed</span><strong>{{ vm.preview.sound_speed_mps | number:0 }} m/s</strong></li>
+      <li><span>Init Error</span><strong>{{ vm.preview.init_relative_error | number:4 }}</strong></li>
+      <li><span>Final Error</span><strong>{{ vm.preview.final_relative_error | number:4 }}</strong></li>
+      <li><span>Iterations</span><strong>{{ vm.preview.optimization_iterations }}</strong></li>
+      <li><span>Solver OK</span><strong>{{ vm.preview.optimization_success ? 'Yes' : 'No' }}</strong></li>
+      <li><span>Error Reduced</span><strong>{{ vm.preview.error_reduced ? 'Yes' : 'No' }}</strong></li>
+      <li><span>Overall Pass</span><strong>{{ vm.preview.overall_pass ? 'Yes' : 'No' }}</strong></li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3>Convergence</h3>
+    <div class="signal-card" ng-if="vm.rmseChart">
+      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.rmseChart.width }} {{ vm.rmseChart.height }}" preserveAspectRatio="none">
+        <path ng-attr-d="{{ vm.rmseChart.path }}" class="signal-line signal-line-accent"></path>
+      </svg>
+    </div>
+    <p class="note">Amplitude-only measurement RMSE across optimizer steps.</p>
+  </div>
+</section>
+
+<section class="grid-2" ng-if="vm.preview">
+  <div class="panel">
+    <h3>Real Component</h3>
+    <div class="signal-card" ng-if="vm.realChart">
+      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.realChart.width }} {{ vm.realChart.height }}" preserveAspectRatio="none">
+        <line x1="0" ng-attr-y1="{{ vm.realChart.baselineY }}" ng-attr-x2="{{ vm.realChart.width }}" ng-attr-y2="{{ vm.realChart.baselineY }}" class="signal-baseline"></line>
+        <path ng-attr-d="{{ vm.realChart.primaryPath }}" class="signal-line"></path>
+        <path ng-attr-d="{{ vm.realChart.secondaryPath }}" class="signal-line signal-line-secondary"></path>
+      </svg>
+    </div>
+    <p class="note">Primary = true analytic real part. Secondary = recovered real part.</p>
+  </div>
+
+  <div class="panel">
+    <h3>Imaginary Component</h3>
+    <div class="signal-card" ng-if="vm.imagChart">
+      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.imagChart.width }} {{ vm.imagChart.height }}" preserveAspectRatio="none">
+        <line x1="0" ng-attr-y1="{{ vm.imagChart.baselineY }}" ng-attr-x2="{{ vm.imagChart.width }}" ng-attr-y2="{{ vm.imagChart.baselineY }}" class="signal-baseline"></line>
+        <path ng-attr-d="{{ vm.imagChart.primaryPath }}" class="signal-line"></path>
+        <path ng-attr-d="{{ vm.imagChart.secondaryPath }}" class="signal-line signal-line-secondary"></path>
+      </svg>
+    </div>
+    <p class="note">Primary = Hilbert-derived analytic imaginary part. Secondary = recovered imaginary part.</p>
+  </div>
+</section>

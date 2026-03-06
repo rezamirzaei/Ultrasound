@@ -24,6 +24,7 @@ from ultrasound.api.services.liver_yolo_training_service import LiverYoloTrainin
 from ultrasound.api.services.media_service import MediaService
 from ultrasound.api.services.ndt_detection_service import NdtDetectionService
 from ultrasound.api.services.observability_service import ObservabilityService
+from ultrasound.api.services.phase_retrieval_service import PhaseRetrievalService
 from ultrasound.api.services.preprocessing_service import PreprocessingService
 from ultrasound.api.services.yolo_service import YoloService
 
@@ -93,6 +94,7 @@ class ApplicationContainer:
         self.preprocessing_service = PreprocessingService(
             self.busi_repository, self.media_service
         )
+        self.phase_retrieval_service = PhaseRetrievalService(self.config)
         self.job_queue_service = JobQueueService(
             repository=self.job_repository,
             busi_training_service=self.busi_training_service,

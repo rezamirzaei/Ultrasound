@@ -85,6 +85,7 @@
         "/yolo": "Liver Ultrasound Detection",
         "/yolo-ultrasound": "YOLO Ultrasound Lab",
         "/preprocessing": "Preprocessing Lab",
+        "/phase-retrieval": "Phase Retrieval Lab",
         "/ndt": "NDT Sample Explorer",
       };
 

@@ -22,6 +22,7 @@ from ultrasound.api.controllers import (
     health_router,
     mlops_router,
     ops_router,
+    phase_retrieval_router,
     preprocessing_router,
     yolo_router,
     yolo_training_router,
@@ -67,6 +68,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(dashboard_router, prefix=api_prefix)
     app.include_router(preprocessing_router, prefix=api_prefix)
     app.include_router(ops_router, prefix=api_prefix)
+    app.include_router(phase_retrieval_router, prefix=api_prefix)
     app.include_router(mlops_router, prefix=api_prefix)
     app.include_router(yolo_router, prefix=api_prefix)
     app.include_router(busi_yolo_router, prefix=api_prefix)

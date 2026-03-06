@@ -448,6 +448,14 @@
         );
       };
 
+      this.getPhaseRetrievalStatus = function () {
+        return unwrap($http.get(baseUrl + "/phase-retrieval/picmus/status", withAuth()));
+      };
+
+      this.previewPhaseRetrieval = function (payload) {
+        return unwrap($http.post(baseUrl + "/phase-retrieval/picmus/preview", payload, withAuth()));
+      };
+
       this.previewPreprocessing = function (payload) {
         return unwrap($http.post(baseUrl + "/preprocessing/preview", payload, withAuth()));
       };

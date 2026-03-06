@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from tests._picmus_fixtures import create_picmus_fixture
 from ultrasound.api.app import create_app
 from ultrasound.api.config import AppConfig
 from ultrasound.api.services.yolo_trainer import YoloTrainingResult
@@ -160,6 +161,7 @@ def client(tmp_path: Path) -> Generator[TestClient, None, None]:
     _create_ndt_fixture(ndt_dir)
     _create_ui_fixture(ui_dir)
     _create_industrial_fixture(data_dir)
+    create_picmus_fixture(data_dir)
 
     config = AppConfig(
         project_root=tmp_path,
@@ -1285,3 +1287,40 @@ def test_upload_endpoints_require_analyst_role(client: TestClient) -> None:
         headers=viewer_headers,
     )
     assert forbidden_industrial.status_code == 403
+
+
+def test_phase_retrieval_status_endpoint_reports_picmus_fixture(client: TestClient) -> None:
+    headers = _auth_headers(client)
+
+    response = client.get("/api/v1/phase-retrieval/picmus/status", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dataset_available"] is True
+    assert payload["recommended_segment_length"] == 96
+    assert sorted(payload["available_cases"]) == ["carotid_cross", "carotid_long"]
+
+
+def test_phase_retrieval_preview_endpoint_runs_on_real_rf_fixture(client: TestClient) -> None:
+    headers = _auth_headers(client)
+
+    response = client.post(
+        "/api/v1/phase-retrieval/picmus/preview",
+        json={
+            "case_name": "carotid_long",
+            "segment_length": 96,
+            "measurement_ratio": 5,
+            "max_iterations": 150,
+            "seed": 7,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["case_name"] == "carotid_long"
+    assert payload["error_reduced"] is True
+    assert payload["overall_pass"] is True
+    assert payload["final_relative_error"] < 0.25
+    assert len(payload["true_real"]) == 96
+    assert payload["amplitude_rmse_curve"]

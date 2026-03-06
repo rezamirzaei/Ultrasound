@@ -24,6 +24,11 @@
           controllerAs: "vm",
           requiredRole: "analyst",
         })
+        .when("/phase-retrieval", {
+          templateUrl: "app/views/phase_retrieval.html",
+          controller: "PhaseRetrievalController",
+          controllerAs: "vm",
+        })
         .when("/ndt", {
           templateUrl: "app/views/ndt.html",
           controller: "NdtController",

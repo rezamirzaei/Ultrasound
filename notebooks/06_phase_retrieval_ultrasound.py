@@ -28,7 +28,8 @@ from _notebook_utils import (
 )
 
 project_root = ensure_src_on_path()
-from ultrasound.workflows import run_phase_retrieval_ultrasound
+from ultrasound.data.picmus_dataset import default_picmus_case, picmus_in_vivo_available
+from ultrasound.workflows import run_phase_retrieval_picmus, run_phase_retrieval_ultrasound
 
 seed = set_reproducible_seed(42)
 output_dir = ensure_notebook_output_dir("06_phase_retrieval_ultrasound")
@@ -38,22 +39,35 @@ print(f"Seed: {seed}")
 print(f"Output directory: {output_dir}")
 
 # %%
-sample = load_ndt_sample("weld_inspection.npz")
-rf = sample["rf"].astype(float)
-start = 200
-length = 256
-rf_segment = rf[start : start + length]
+picmus_root = project_root / "data" / "picmus"
+if picmus_in_vivo_available(picmus_root):
+    case_name = default_picmus_case(picmus_root)
+    result = run_phase_retrieval_picmus(
+        root_dir=str(picmus_root),
+        case_name=case_name,
+        segment_length=96,
+        measurement_ratio=5,
+        n_iter=150,
+        seed=seed,
+    )
+    report = dict(result.report)
+    report["sample"] = f"PICMUS:{case_name}"
+else:
+    sample = load_ndt_sample("weld_inspection.npz")
+    rf = sample["rf"].astype(float)
+    start = 200
+    length = 128
+    rf_segment = rf[start : start + length]
 
-result = run_phase_retrieval_ultrasound(
-    rf_segment,
-    seed=seed,
-    measurement_ratio=4,
-    noise_scale=0.01,
-    n_iter=180,
-    step_size=0.22,
-)
-report = dict(result.report)
-report["sample"] = sample["name"]
+    result = run_phase_retrieval_ultrasound(
+        rf_segment,
+        seed=seed,
+        measurement_ratio=5,
+        n_iter=150,
+        solver="lbfgs",
+    )
+    report = dict(result.report)
+    report["sample"] = sample["name"]
 report
 
 # %%

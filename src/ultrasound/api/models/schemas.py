@@ -316,6 +316,56 @@ class PreprocessingPreviewResponse(BaseModel):
     generated_at: datetime
 
 
+class PhaseRetrievalStatusResponse(BaseModel):
+    generated_at: datetime
+    dataset_available: bool
+    dataset_root: str
+    source_url: str
+    available_cases: list[str] = Field(default_factory=list)
+    recommended_case: str
+    recommended_segment_length: int = Field(ge=32)
+    recommended_measurement_ratio: int = Field(ge=1)
+    recommended_solver: Literal["lbfgs", "wirtinger"] = "lbfgs"
+
+
+class PhaseRetrievalPreviewRequest(BaseModel):
+    case_name: str = Field(default="carotid_long", min_length=2)
+    segment_length: int = Field(default=96, ge=32, le=256)
+    measurement_ratio: int = Field(default=5, ge=1, le=12)
+    max_iterations: int = Field(default=150, ge=10, le=1000)
+    seed: int = Field(default=42, ge=0)
+    angle_index: int | None = Field(default=None, ge=0)
+    element_index: int | None = Field(default=None, ge=0)
+    start_index: int | None = Field(default=None, ge=0)
+
+
+class PhaseRetrievalPreviewResponse(BaseModel):
+    generated_at: datetime
+    dataset_name: str
+    case_name: str
+    angle_index: int = Field(ge=0)
+    element_index: int = Field(ge=0)
+    start_index: int = Field(ge=0)
+    segment_length: int = Field(ge=32)
+    energy: float = Field(ge=0.0)
+    sampling_frequency_hz: float = Field(gt=0.0)
+    sound_speed_mps: float = Field(gt=0.0)
+    solver: Literal["lbfgs", "wirtinger"] = "lbfgs"
+    measurement_ratio: int = Field(ge=1)
+    measurement_count: int = Field(ge=1)
+    optimization_iterations: int = Field(ge=0)
+    optimization_success: bool = True
+    init_relative_error: float = Field(ge=0.0)
+    final_relative_error: float = Field(ge=0.0)
+    error_reduced: bool
+    overall_pass: bool
+    true_real: list[float] = Field(default_factory=list)
+    recovered_real: list[float] = Field(default_factory=list)
+    true_imag: list[float] = Field(default_factory=list)
+    recovered_imag: list[float] = Field(default_factory=list)
+    amplitude_rmse_curve: list[float] = Field(default_factory=list)
+
+
 class ApiError(BaseModel):
     detail: str
     request_id: str | None = None
@@ -554,4 +604,3 @@ class DownloadedAssetManifest(BaseModel):
     downloaded_at: datetime
     sha256: str = Field(min_length=64, max_length=64)
     size_bytes: int = Field(ge=0)
-

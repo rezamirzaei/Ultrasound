@@ -51,6 +51,7 @@ data/phase_retrieval/
 data/ascan_signals/
 data/liver_ultrasound_detection/
 data/liver_yolo/
+data/picmus/
 data/*.sqlite3
 data/*.db
 
