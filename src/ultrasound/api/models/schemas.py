@@ -323,19 +323,23 @@ class PhaseRetrievalStatusResponse(BaseModel):
     source_url: str
     available_cases: list[str] = Field(default_factory=list)
     recommended_case: str
-    recommended_segment_length: int = Field(ge=32)
-    recommended_measurement_ratio: int = Field(ge=1)
-    recommended_solver: Literal["lbfgs", "wirtinger"] = "lbfgs"
+    recommended_window_length: int = Field(ge=64)
+    recommended_n_fft: int = Field(ge=16)
+    recommended_hop_length: int = Field(ge=1)
+    recommended_solver: Literal["griffin_lim"] = "griffin_lim"
+    recovered_quantity: str
+    measurement_description: str
 
 
 class PhaseRetrievalPreviewRequest(BaseModel):
-    case_name: str = Field(default="carotid_long", min_length=2)
-    segment_length: int = Field(default=96, ge=32, le=256)
-    measurement_ratio: int = Field(default=5, ge=1, le=12)
-    max_iterations: int = Field(default=150, ge=10, le=1000)
+    case_name: str = Field(default="Parietal_free_field_0_XY", min_length=2)
+    window_length: int = Field(default=256, ge=64, le=512)
+    n_fft: int = Field(default=80, ge=16, le=256)
+    hop_length: int = Field(default=8, ge=1, le=128)
+    max_iterations: int = Field(default=120, ge=10, le=1000)
     seed: int = Field(default=42, ge=0)
-    angle_index: int | None = Field(default=None, ge=0)
-    element_index: int | None = Field(default=None, ge=0)
+    row_index: int | None = Field(default=None, ge=0)
+    col_index: int | None = Field(default=None, ge=0)
     start_index: int | None = Field(default=None, ge=0)
 
 
@@ -343,27 +347,32 @@ class PhaseRetrievalPreviewResponse(BaseModel):
     generated_at: datetime
     dataset_name: str
     case_name: str
-    angle_index: int = Field(ge=0)
-    element_index: int = Field(ge=0)
+    plane: Literal["XY", "XZ"]
+    row_index: int = Field(ge=0)
+    col_index: int = Field(ge=0)
     start_index: int = Field(ge=0)
-    segment_length: int = Field(ge=32)
-    energy: float = Field(ge=0.0)
-    sampling_frequency_hz: float = Field(gt=0.0)
-    sound_speed_mps: float = Field(gt=0.0)
-    solver: Literal["lbfgs", "wirtinger"] = "lbfgs"
-    measurement_ratio: int = Field(ge=1)
-    measurement_count: int = Field(ge=1)
-    optimization_iterations: int = Field(ge=0)
-    optimization_success: bool = True
+    window_length: int = Field(ge=64)
+    trace_energy: float = Field(ge=0.0)
+    dominant_frequency_bin: int = Field(ge=1)
+    solver: Literal["griffin_lim"] = "griffin_lim"
+    n_fft: int = Field(ge=16)
+    hop_length: int = Field(ge=1)
+    optimization_iterations: int = Field(ge=1)
     init_relative_error: float = Field(ge=0.0)
     final_relative_error: float = Field(ge=0.0)
+    signal_correlation: float = Field(ge=0.0, le=1.0)
+    phase_rmse: float = Field(ge=0.0)
+    initial_consistency_error: float = Field(ge=0.0)
+    final_consistency_error: float = Field(ge=0.0)
     error_reduced: bool
     overall_pass: bool
-    true_real: list[float] = Field(default_factory=list)
-    recovered_real: list[float] = Field(default_factory=list)
-    true_imag: list[float] = Field(default_factory=list)
-    recovered_imag: list[float] = Field(default_factory=list)
-    amplitude_rmse_curve: list[float] = Field(default_factory=list)
+    true_signal: list[float] = Field(default_factory=list)
+    recovered_signal: list[float] = Field(default_factory=list)
+    true_phase_spectrum: list[float] = Field(default_factory=list)
+    recovered_phase_spectrum: list[float] = Field(default_factory=list)
+    residual_curve: list[float] = Field(default_factory=list)
+    scan_image_data_url: str
+    spectrogram_image_data_url: str
 
 
 class ApiError(BaseModel):

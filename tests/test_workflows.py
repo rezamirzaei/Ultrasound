@@ -8,17 +8,17 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from tests._picmus_fixtures import create_picmus_fixture
+from tests._transcranial_fixtures import create_transcranial_fixture
 from ultrasound.workflows import (
     run_dataset_healthcheck,
     run_masked_proximal_decomposition,
     run_mini_training_pipeline,
     run_model_metric_smoke,
     run_ndt_ascan_analysis,
-    run_phase_retrieval_picmus,
+    run_phase_retrieval_transcranial,
     run_phase_retrieval_ultrasound,
     run_preprocessing_workbench,
-    tune_phase_retrieval_picmus,
+    tune_phase_retrieval_transcranial,
 )
 
 
@@ -117,52 +117,59 @@ def test_run_ndt_ascan_analysis_detects_echoes() -> None:
     assert result.status["overall_pass"] is True
 
 
-def test_run_phase_retrieval_ultrasound_improves_initialization() -> None:
-    x = np.linspace(0.0, 4.0 * np.pi, 128, dtype=np.float64)
-    rf = np.sin(x) + 0.2 * np.sin(3.0 * x)
+def test_run_phase_retrieval_ultrasound_recovers_waveform_from_stft_magnitude() -> None:
+    samples = np.arange(256, dtype=np.float64)
+    centered = samples - 104.0
+    rf = np.exp(-0.5 * (centered / 15.0) ** 2) * (
+        np.cos(2.0 * np.pi * 0.10 * centered) + 0.12 * np.cos(2.0 * np.pi * 0.18 * centered)
+    )
 
-    result = run_phase_retrieval_ultrasound(rf, seed=4, measurement_ratio=5, n_iter=150)
+    result = run_phase_retrieval_ultrasound(rf, seed=4, n_fft=64, hop_length=8, n_iter=100)
 
     assert result.status["error_reduced"] is True
     assert result.report["final_relative_error"] < 0.25
-    assert result.measured_amplitude.shape == result.reconstructed_amplitude.shape
-    assert result.amplitude_rmse
+    assert result.report["signal_correlation"] > 0.95
+    assert result.measured_spectrogram.shape == result.reconstructed_spectrogram.shape
+    assert result.residual_curve
 
 
-def test_run_phase_retrieval_picmus_uses_real_rf_fixture(tmp_path: Path) -> None:
-    create_picmus_fixture(tmp_path)
+def test_run_phase_retrieval_transcranial_uses_real_hydrophone_fixture(tmp_path: Path) -> None:
+    create_transcranial_fixture(tmp_path)
 
-    result = run_phase_retrieval_picmus(
-        root_dir=str(tmp_path / "picmus"),
-        case_name="carotid_long",
-        segment_length=96,
-        measurement_ratio=5,
-        n_iter=150,
+    result = run_phase_retrieval_transcranial(
+        root_dir=str(tmp_path / "phase_retrieval"),
+        case_name="Parietal_free_field_0_XY",
+        window_length=256,
+        n_fft=80,
+        hop_length=8,
+        n_iter=120,
         seed=7,
     )
 
     assert result.signal_metadata is not None
-    assert result.signal_metadata["case_name"] == "carotid_long"
+    assert result.signal_metadata["case_name"] == "Parietal_free_field_0_XY"
     assert result.report["final_relative_error"] < 0.25
     assert result.status["overall_pass"] is True
+    assert result.scan_energy_map is not None
 
 
-def test_tune_phase_retrieval_picmus_returns_best_config(tmp_path: Path) -> None:
-    create_picmus_fixture(tmp_path)
+def test_tune_phase_retrieval_transcranial_returns_best_config(tmp_path: Path) -> None:
+    create_transcranial_fixture(tmp_path)
 
-    tuning = tune_phase_retrieval_picmus(
-        root_dir=str(tmp_path / "picmus"),
-        cases=["carotid_cross", "carotid_long"],
-        segment_lengths=(96,),
-        measurement_ratios=(4, 5, 6),
-        iteration_grid=(150,),
+    tuning = tune_phase_retrieval_transcranial(
+        root_dir=str(tmp_path / "phase_retrieval"),
+        cases=["Frontal_40_XY", "Parietal_free_field_0_XY"],
+        window_lengths=(256,),
+        n_fft_grid=(64, 80),
+        hop_length_grid=(8,),
+        iteration_grid=(80,),
         seed=11,
     )
 
-    assert tuning.best_config["segment_length"] == 96
-    assert tuning.best_config["measurement_ratio"] in {4, 5, 6}
+    assert tuning.best_config["window_length"] == 256
+    assert tuning.best_config["n_fft"] in {64, 80}
     assert tuning.ranked_results
-    assert tuning.cases == ["carotid_cross", "carotid_long"]
+    assert tuning.cases == ["Frontal_40_XY", "Parietal_free_field_0_XY"]
 
 
 def test_run_masked_proximal_decomposition_beats_zero_fill_baseline() -> None:

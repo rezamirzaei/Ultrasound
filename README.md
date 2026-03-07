@@ -22,8 +22,8 @@ The repository is currently verified with:
 
 Current local verification snapshot:
 
-- `358` passing tests
-- `94.19%` total coverage
+- `361` passing tests
+- `93.93%` total coverage
 - CI gates on `ruff`, `mypy`, `pytest`, package build, Alembic migration upgrade, and Docker test execution
 
 ## What Is In The Repository
@@ -56,7 +56,7 @@ Current local verification snapshot:
 - BUSI dataset loading and synthetic sample generation
 - liver ultrasound detection dataset preparation and training flows
 - NDT A-scan sample loading, wall echo analysis, thickness estimation, and defect fusion
-- PICMUS in-vivo RF dataset loading plus real-data phase retrieval workflows
+- ETH transcranial hydrophone scan loading plus real-data phase retrieval workflows
 - tested workflow modules under `src/ultrasound/workflows/`
 - notebook wrappers under `notebooks/` that call library code instead of containing core logic directly
 
@@ -168,7 +168,7 @@ The application currently exposes:
 - industrial dataset coverage, previews, and training flows
 - NDT sample metadata, waveform preview, wall echo/thickness analysis, and defect exploration
 - preprocessing preview lab
-- PICMUS phase retrieval lab
+- transcranial hydrophone phase retrieval lab
 - YOLO liver detection lab
 - YOLO BUSI ultrasound lab
 - upload endpoints for BUSI and industrial samples
@@ -183,8 +183,8 @@ Representative endpoints:
 - `GET /api/v1/datasets/ndt/samples/{sample_name}`
 - `GET /api/v1/datasets/ndt/samples/{sample_name}/signal`
 - `POST /api/v1/preprocessing/preview`
-- `GET /api/v1/phase-retrieval/picmus/status`
-- `POST /api/v1/phase-retrieval/picmus/preview`
+- `GET /api/v1/phase-retrieval/transcranial/status`
+- `POST /api/v1/phase-retrieval/transcranial/preview`
 - `POST /api/v1/datasets/busi/upload`
 - `POST /api/v1/datasets/industrial/upload`
 - `GET /api/v1/yolo/status`
@@ -224,21 +224,22 @@ The liver detection flow expects the liver ultrasound detection dataset under `d
 
 NDT examples use `.npz` A-scan sample files under `data/ascan_signals/ndt_samples/`.
 
-### PICMUS phase retrieval
+### Transcranial phase retrieval
 
-The phase retrieval workflow now supports real ultrasound RF data from the PICMUS in-vivo challenge dataset.
+The phase retrieval workflow now uses a real hydrophone scan dataset from ETH Zurich rather than repurposed RF imaging traces.
+The recovered object is explicit: a measured hydrophone pulse and its missing phase, reconstructed from STFT magnitude only.
 
-- source: `https://www.creatis.insa-lyon.fr/Challenge/IEEE_IUS_2016/home`
-- local destination: `data/picmus/`
-- download script: `python scripts/download_picmus_in_vivo.py`
+- source: `https://www.research-collection.ethz.ch/entities/dataset/77f541ab-2cc2-4274-a9f6-49c5475754ca`
+- local destination: `data/phase_retrieval/transcranial/`
+- download script: `python scripts/download_transcranial_phase_retrieval.py`
 - UI section: `Phase Retrieval Lab`
 - notebook wrapper: `notebooks/06_phase_retrieval_ultrasound.ipynb`
 
-The default preview uses a tuned configuration on real carotid RF traces:
+The default preview uses a tuned configuration on real transcranial hydrophone traces:
 
-- `96` sample high-energy window
-- `5x` amplitude-only measurements
-- `L-BFGS-B` solver with `150` iterations
+- `256` sample waveform window
+- `80` sample STFT window with hop `8`
+- `Griffin-Lim` solver with `120` iterations
 
 ## Notebooks And Workflows
 

@@ -12,14 +12,15 @@
       vm.running = false;
       vm.status = null;
       vm.preview = null;
-      vm.realChart = null;
-      vm.imagChart = null;
-      vm.rmseChart = null;
+      vm.waveformChart = null;
+      vm.phaseChart = null;
+      vm.residualChart = null;
       vm.form = {
-        case_name: "carotid_long",
-        segment_length: 96,
-        measurement_ratio: 5,
-        max_iterations: 150,
+        case_name: "Parietal_free_field_0_XY",
+        window_length: 256,
+        n_fft: 80,
+        hop_length: 8,
+        max_iterations: 120,
         seed: 42,
       };
 
@@ -78,9 +79,12 @@
       }
 
       function renderCharts(preview) {
-        vm.realChart = buildOverlayChart(preview.true_real || [], preview.recovered_real || []);
-        vm.imagChart = buildOverlayChart(preview.true_imag || [], preview.recovered_imag || []);
-        vm.rmseChart = buildLineChart(preview.amplitude_rmse_curve || [0]);
+        vm.waveformChart = buildOverlayChart(preview.true_signal || [], preview.recovered_signal || []);
+        vm.phaseChart = buildOverlayChart(
+          preview.true_phase_spectrum || [],
+          preview.recovered_phase_spectrum || []
+        );
+        vm.residualChart = buildLineChart(preview.residual_curve || [0]);
       }
 
       function refreshStatus() {
@@ -92,8 +96,9 @@
                 vm.form.case_name = status.recommended_case || status.available_cases[0];
               }
             }
-            vm.form.segment_length = status.recommended_segment_length || vm.form.segment_length;
-            vm.form.measurement_ratio = status.recommended_measurement_ratio || vm.form.measurement_ratio;
+            vm.form.window_length = status.recommended_window_length || vm.form.window_length;
+            vm.form.n_fft = status.recommended_n_fft || vm.form.n_fft;
+            vm.form.hop_length = status.recommended_hop_length || vm.form.hop_length;
           })
           .catch(function (error) {
             vm.error = error.detail || "Failed to load phase retrieval status";
@@ -105,9 +110,9 @@
         vm.running = true;
         vm.previewError = null;
         vm.preview = null;
-        vm.realChart = null;
-        vm.imagChart = null;
-        vm.rmseChart = null;
+        vm.waveformChart = null;
+        vm.phaseChart = null;
+        vm.residualChart = null;
 
         ApiService.previewPhaseRetrieval(vm.form)
           .then(function (preview) {

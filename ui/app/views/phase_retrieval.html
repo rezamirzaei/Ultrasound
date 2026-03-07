@@ -9,8 +9,12 @@
 <section class="panel" ng-if="!vm.loading && vm.status">
   <h3>Phase Retrieval Lab</h3>
   <p class="note">
-    Run tuned amplitude-only phase retrieval on real PICMUS in-vivo carotid ultrasound RF data.
-    The workflow auto-selects the highest-energy RF window in each case and reconstructs the analytic signal.
+    Recover the missing phase of a real hydrophone waveform from STFT magnitude only.
+    The dataset is an ETH transcranial ultrasound scan set, and the recovered output is the selected
+    pulse waveform plus its phase spectrum.
+  </p>
+  <p class="note">
+    {{ vm.status.recovered_quantity }}
   </p>
 </section>
 
@@ -21,14 +25,15 @@
     <li><span>Dataset Root</span><strong>{{ vm.status.dataset_root }}</strong></li>
     <li><span>Cases</span><strong>{{ (vm.status.available_cases || []).join(', ') || 'none' }}</strong></li>
     <li><span>Recommended Solver</span><strong>{{ vm.status.recommended_solver }}</strong></li>
-    <li><span>Recommended Segment</span><strong>{{ vm.status.recommended_segment_length }} samples</strong></li>
-    <li><span>Recommended Ratio</span><strong>{{ vm.status.recommended_measurement_ratio }}x</strong></li>
+    <li><span>Window Length</span><strong>{{ vm.status.recommended_window_length }} samples</strong></li>
+    <li><span>STFT</span><strong>{{ vm.status.recommended_n_fft }} / hop {{ vm.status.recommended_hop_length }}</strong></li>
   </ul>
+  <p class="note">{{ vm.status.measurement_description }}</p>
   <p class="note">
     Source: <code>{{ vm.status.source_url }}</code>
   </p>
   <p class="note" ng-if="!vm.status.dataset_available">
-    Download the dataset with <code>python scripts/download_picmus_in_vivo.py</code>.
+    Download the dataset with <code>python scripts/download_transcranial_phase_retrieval.py</code>.
   </p>
 </section>
 
@@ -36,18 +41,22 @@
   <h3>Run Preview</h3>
   <form class="form-grid" ng-submit="vm.run()">
     <label>
-      PICMUS Case
+      Scan Case
       <select ng-model="vm.form.case_name">
         <option ng-repeat="caseName in vm.status.available_cases" value="{{ caseName }}">{{ caseName }}</option>
       </select>
     </label>
     <label>
-      Segment Length
-      <input type="number" min="32" max="256" step="16" ng-model="vm.form.segment_length" />
+      Window Length
+      <input type="number" min="64" max="512" step="16" ng-model="vm.form.window_length" />
     </label>
     <label>
-      Measurement Ratio
-      <input type="number" min="1" max="12" step="1" ng-model="vm.form.measurement_ratio" />
+      STFT Window
+      <input type="number" min="16" max="256" step="8" ng-model="vm.form.n_fft" />
+    </label>
+    <label>
+      Hop Length
+      <input type="number" min="1" max="128" step="1" ng-model="vm.form.hop_length" />
     </label>
     <label>
       Max Iterations
@@ -71,53 +80,67 @@
     <h3>Recovery Summary</h3>
     <ul class="list compact">
       <li><span>Case</span><strong>{{ vm.preview.case_name }}</strong></li>
-      <li><span>Angle / Element</span><strong>{{ vm.preview.angle_index }} / {{ vm.preview.element_index }}</strong></li>
+      <li><span>Plane</span><strong>{{ vm.preview.plane }}</strong></li>
+      <li><span>Selected Point</span><strong>{{ vm.preview.row_index }} / {{ vm.preview.col_index }}</strong></li>
       <li><span>Window Start</span><strong>{{ vm.preview.start_index }}</strong></li>
-      <li><span>Segment Energy</span><strong>{{ vm.preview.energy | number:4 }}</strong></li>
-      <li><span>Sampling Frequency</span><strong>{{ vm.preview.sampling_frequency_hz / 1000000 | number:2 }} MHz</strong></li>
-      <li><span>Sound Speed</span><strong>{{ vm.preview.sound_speed_mps | number:0 }} m/s</strong></li>
+      <li><span>Trace Energy</span><strong>{{ vm.preview.trace_energy | number:4 }}</strong></li>
+      <li><span>Dominant Bin</span><strong>{{ vm.preview.dominant_frequency_bin }}</strong></li>
       <li><span>Init Error</span><strong>{{ vm.preview.init_relative_error | number:4 }}</strong></li>
       <li><span>Final Error</span><strong>{{ vm.preview.final_relative_error | number:4 }}</strong></li>
-      <li><span>Iterations</span><strong>{{ vm.preview.optimization_iterations }}</strong></li>
-      <li><span>Solver OK</span><strong>{{ vm.preview.optimization_success ? 'Yes' : 'No' }}</strong></li>
-      <li><span>Error Reduced</span><strong>{{ vm.preview.error_reduced ? 'Yes' : 'No' }}</strong></li>
+      <li><span>Correlation</span><strong>{{ vm.preview.signal_correlation | number:4 }}</strong></li>
+      <li><span>Phase RMSE</span><strong>{{ vm.preview.phase_rmse | number:4 }}</strong></li>
+      <li><span>Consistency</span><strong>{{ vm.preview.initial_consistency_error | number:4 }} -> {{ vm.preview.final_consistency_error | number:4 }}</strong></li>
       <li><span>Overall Pass</span><strong>{{ vm.preview.overall_pass ? 'Yes' : 'No' }}</strong></li>
     </ul>
   </div>
 
   <div class="panel">
-    <h3>Convergence</h3>
-    <div class="signal-card" ng-if="vm.rmseChart">
-      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.rmseChart.width }} {{ vm.rmseChart.height }}" preserveAspectRatio="none">
-        <path ng-attr-d="{{ vm.rmseChart.path }}" class="signal-line signal-line-accent"></path>
-      </svg>
-    </div>
-    <p class="note">Amplitude-only measurement RMSE across optimizer steps.</p>
+    <h3>Selected Trace Context</h3>
+    <img ng-src="{{ vm.preview.scan_image_data_url }}" alt="Selected hydrophone trace on scan map" class="preview-image" />
+    <p class="note">Energy map of the scan plane. Red cross marks the waveform used for phase retrieval.</p>
   </div>
 </section>
 
 <section class="grid-2" ng-if="vm.preview">
   <div class="panel">
-    <h3>Real Component</h3>
-    <div class="signal-card" ng-if="vm.realChart">
-      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.realChart.width }} {{ vm.realChart.height }}" preserveAspectRatio="none">
-        <line x1="0" ng-attr-y1="{{ vm.realChart.baselineY }}" ng-attr-x2="{{ vm.realChart.width }}" ng-attr-y2="{{ vm.realChart.baselineY }}" class="signal-baseline"></line>
-        <path ng-attr-d="{{ vm.realChart.primaryPath }}" class="signal-line"></path>
-        <path ng-attr-d="{{ vm.realChart.secondaryPath }}" class="signal-line signal-line-secondary"></path>
-      </svg>
-    </div>
-    <p class="note">Primary = true analytic real part. Secondary = recovered real part.</p>
+    <h3>Measurement</h3>
+    <img ng-src="{{ vm.preview.spectrogram_image_data_url }}" alt="Measured magnitude spectrogram" class="preview-image" />
+    <p class="note">This magnitude spectrogram is the only measurement given to the solver.</p>
   </div>
 
   <div class="panel">
-    <h3>Imaginary Component</h3>
-    <div class="signal-card" ng-if="vm.imagChart">
-      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.imagChart.width }} {{ vm.imagChart.height }}" preserveAspectRatio="none">
-        <line x1="0" ng-attr-y1="{{ vm.imagChart.baselineY }}" ng-attr-x2="{{ vm.imagChart.width }}" ng-attr-y2="{{ vm.imagChart.baselineY }}" class="signal-baseline"></line>
-        <path ng-attr-d="{{ vm.imagChart.primaryPath }}" class="signal-line"></path>
-        <path ng-attr-d="{{ vm.imagChart.secondaryPath }}" class="signal-line signal-line-secondary"></path>
+    <h3>Consistency Residual</h3>
+    <div class="signal-card" ng-if="vm.residualChart">
+      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.residualChart.width }} {{ vm.residualChart.height }}" preserveAspectRatio="none">
+        <path ng-attr-d="{{ vm.residualChart.path }}" class="signal-line signal-line-accent"></path>
       </svg>
     </div>
-    <p class="note">Primary = Hilbert-derived analytic imaginary part. Secondary = recovered imaginary part.</p>
+    <p class="note">STFT magnitude consistency error across Griffin-Lim iterations.</p>
+  </div>
+</section>
+
+<section class="grid-2" ng-if="vm.preview">
+  <div class="panel">
+    <h3>Recovered Waveform</h3>
+    <div class="signal-card" ng-if="vm.waveformChart">
+      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.waveformChart.width }} {{ vm.waveformChart.height }}" preserveAspectRatio="none">
+        <line x1="0" ng-attr-y1="{{ vm.waveformChart.baselineY }}" ng-attr-x2="{{ vm.waveformChart.width }}" ng-attr-y2="{{ vm.waveformChart.baselineY }}" class="signal-baseline"></line>
+        <path ng-attr-d="{{ vm.waveformChart.primaryPath }}" class="signal-line"></path>
+        <path ng-attr-d="{{ vm.waveformChart.secondaryPath }}" class="signal-line signal-line-secondary"></path>
+      </svg>
+    </div>
+    <p class="note">Primary = measured waveform. Secondary = waveform reconstructed from magnitude-only STFT data.</p>
+  </div>
+
+  <div class="panel">
+    <h3>Recovered Phase Spectrum</h3>
+    <div class="signal-card" ng-if="vm.phaseChart">
+      <svg class="signal-chart" ng-attr-viewBox="0 0 {{ vm.phaseChart.width }} {{ vm.phaseChart.height }}" preserveAspectRatio="none">
+        <line x1="0" ng-attr-y1="{{ vm.phaseChart.baselineY }}" ng-attr-x2="{{ vm.phaseChart.width }}" ng-attr-y2="{{ vm.phaseChart.baselineY }}" class="signal-baseline"></line>
+        <path ng-attr-d="{{ vm.phaseChart.primaryPath }}" class="signal-line"></path>
+        <path ng-attr-d="{{ vm.phaseChart.secondaryPath }}" class="signal-line signal-line-secondary"></path>
+      </svg>
+    </div>
+    <p class="note">Primary = measured spectrum phase. Secondary = phase implied by the recovered waveform.</p>
   </div>
 </section>

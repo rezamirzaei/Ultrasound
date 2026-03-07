@@ -11,9 +11,9 @@ from .ndt_ascan_analysis import NdtAscanAnalysisResult, run_ndt_ascan_analysis
 from .phase_retrieval_ultrasound import (
     PhaseRetrievalResult,
     PhaseRetrievalTuningResult,
-    run_phase_retrieval_picmus,
+    run_phase_retrieval_transcranial,
     run_phase_retrieval_ultrasound,
-    tune_phase_retrieval_picmus,
+    tune_phase_retrieval_transcranial,
 )
 from .preprocessing_workbench import PreprocessingWorkbenchResult, run_preprocessing_workbench
 
@@ -31,8 +31,8 @@ __all__ = [
     "run_model_metric_smoke",
     "run_mini_training_pipeline",
     "run_ndt_ascan_analysis",
-    "run_phase_retrieval_picmus",
+    "run_phase_retrieval_transcranial",
     "run_phase_retrieval_ultrasound",
     "run_preprocessing_workbench",
-    "tune_phase_retrieval_picmus",
+    "tune_phase_retrieval_transcranial",
 ]

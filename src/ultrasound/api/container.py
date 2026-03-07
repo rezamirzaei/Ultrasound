@@ -94,7 +94,7 @@ class ApplicationContainer:
         self.preprocessing_service = PreprocessingService(
             self.busi_repository, self.media_service
         )
-        self.phase_retrieval_service = PhaseRetrievalService(self.config)
+        self.phase_retrieval_service = PhaseRetrievalService(self.config, self.media_service)
         self.job_queue_service = JobQueueService(
             repository=self.job_repository,
             busi_training_service=self.busi_training_service,

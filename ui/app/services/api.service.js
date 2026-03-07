@@ -449,11 +449,11 @@
       };
 
       this.getPhaseRetrievalStatus = function () {
-        return unwrap($http.get(baseUrl + "/phase-retrieval/picmus/status", withAuth()));
+        return unwrap($http.get(baseUrl + "/phase-retrieval/transcranial/status", withAuth()));
       };
 
       this.previewPhaseRetrieval = function (payload) {
-        return unwrap($http.post(baseUrl + "/phase-retrieval/picmus/preview", payload, withAuth()));
+        return unwrap($http.post(baseUrl + "/phase-retrieval/transcranial/preview", payload, withAuth()));
       };
 
       this.previewPreprocessing = function (payload) {
